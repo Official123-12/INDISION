@@ -2,10 +2,10 @@
   "name": "insidious-bot",
   "version": "2.1.1",
   "description": "INSIDIOUS: THE LAST KEY WhatsApp Bot",
-  "main": "index.js",
+  "main": "main.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node main.js",
+    "dev": "nodemon main.js"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -29,7 +29,8 @@
     "pino": "^8.15.0",
     "qrcode-terminal": "^0.12.0",
     "yt-search": "^2.10.4",
-    "moment-timezone": "^0.5.43"
+    "moment-timezone": "^0.5.43",
+    "node-telegram-bot-api": "^0.61.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
