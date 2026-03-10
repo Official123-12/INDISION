@@ -62,6 +62,11 @@ module.exports = {
 
 _© 2026 ${config.developerName} Industries_`;
 
+            // 🔥 SPLIT: Tumia fancy kwa sehemu zote isipokuwa URL ya channel
+            const url = config.channelUrl;
+            const [before, after] = supportBody.split(url);
+            const finalMessage = fancy(before) + url + fancy(after);
+
             // ========== 🎨 BUTTONS ==========
             const buttons = [
                 {
@@ -96,7 +101,7 @@ _© 2026 ${config.developerName} Industries_`;
 
             // ========== 📲 SEND MESSAGE ==========
             await conn.sendMessage(from, {
-                text: fancy(supportBody),
+                text: finalMessage,
                 contextInfo: {
                     externalAdReply: {
                         title: "ɪɴꜱɪᴅɪᴏᴜꜱ : ꜱᴜᴘᴘᴏʀᴛ ᴄᴇɴᴛᴇʀ",
@@ -118,4 +123,3 @@ _© 2026 ${config.developerName} Industries_`;
         }
     }
 };
-
