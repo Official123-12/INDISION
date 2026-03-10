@@ -9,7 +9,6 @@ const fs = require('fs-extra');
 const path = require('path');
 const config = require('../../config');
 const { fancy, runtime } = require('../../lib/tools');
-const { doc, getDoc } = require('firebase/firestore');
 
 module.exports = {
     name: 'menu2',
@@ -38,18 +37,9 @@ module.exports = {
             }
             userName = userName?.trim() || `User_${userNumber.slice(-4)}`;
 
-            // ========== 🔥 FIREBASE CONFIG (Safe Fallback) ==========
-            let fbConfig = { prefix: '.', mode: 'public' };
-            if (db) {
-                try {
-                    const setSnap = await getDoc(doc(db, "SETTINGS", "GLOBAL"));
-                    if (setSnap.exists()) fbConfig = setSnap.data();
-                } catch (e) {
-                    console.warn("⚠️ Firebase config fallback:", e.message);
-                }
-            }
-            const prefix = fbConfig.prefix || config.prefix || '.';
-            const botMode = fbConfig.mode?.toUpperCase() || 'PUBLIC';
+            // ========== 🔧 CONFIG (Firebase removed – using local config) ==========
+            const prefix = config.prefix || '.';
+            const botMode = (config.mode || 'public').toUpperCase();
 
             const uptimeSeconds = process.uptime();
             const uptimeStr = `${Math.floor(uptimeSeconds / 3600)}h ${Math.floor((uptimeSeconds % 3600) / 60)}m`;
@@ -147,4 +137,3 @@ module.exports = {
         }
     }
 };
-
