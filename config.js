@@ -49,7 +49,7 @@ module.exports = {
     // ═══════════════════════════════════════════════════════════
     channelUrl: getConfig('CHANNEL_URL', "https://whatsapp.com/channel/stanytz"),
     websiteUrl: getConfig('WEBSITE_URL', "https://insidious-bot.vercel.app"),
-    githubUrl: getConfig('GITHUB_URL', "https://github.com/stanytz/insidious"),
+    githubUrl: getConfig('GITHUB_URL', "https://github.com/stanytz378"),
     telegramUrl: getConfig('TELEGRAM_URL', "https://t.me/insidious_support"),
     twitterUrl: getConfig('TWITTER_URL', "https://twitter.com/stanytz"),
 
