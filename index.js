@@ -3,7 +3,8 @@ const { default: makeWASocket, useMultiFileAuthState, Browsers, makeCacheableSig
 const pino = require("pino");
 const mongoose = require("mongoose");
 const path = require("path");
-const fs = require('fs-extra'); // tumia fs-extra kwa mkdirp rahisi
+const fs = require('fs-extra');
+const crypto = require('crypto'); // for generating secrets
 
 // ==================== HANDLER ====================
 const handler = require('./handler');
@@ -59,6 +60,24 @@ const sessionSchema = new mongoose.Schema({
     lastActive: { type: Date, default: Date.now }
 });
 const Session = mongoose.model('Session', sessionSchema);
+
+// ✅ **PENDING PAIRING SCHEMA – kuhifadhi secret kabla ya kuunganishwa**
+const pendingSchema = new mongoose.Schema({
+    number: { type: String, required: true, unique: true },
+    secret: { type: String, required: true, unique: true },
+    createdAt: { type: Date, default: Date.now, expires: 3600 } // expires after 1 hour
+});
+const Pending = mongoose.model('Pending', pendingSchema);
+
+// ✅ **BOT SETTINGS SCHEMA – mipangilio ya kila bot inayomilikiwa na secret**
+const botSettingsSchema = new mongoose.Schema({
+    secret: { type: String, required: true, unique: true },
+    number: { type: String, required: true },
+    settings: { type: Object, default: {} },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
+});
+const BotSettings = mongoose.model('BotSettings', botSettingsSchema);
 
 // ✅ **ACTIVE SOCKETS MAP** (badala ya globalConn moja)
 const activeSockets = new Map(); // key: namba (sanitized) -> socket
@@ -120,6 +139,11 @@ async function deleteSessionFromDB(number) {
     } catch (error) {
         console.error(fancy(`❌ Failed to delete session for ${number}:`), error.message);
     }
+}
+
+// ✅ **GENERATE UNIQUE SECRET**
+function generateSecret() {
+    return 'INS' + crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
 // ==================== BOT START FUNCTION (PER NUMBER) ====================
@@ -196,6 +220,10 @@ async function startBot(number, res = null) {
 
         // ==================== PAIRING CODE (if new session) ====================
         if (!existingSession) {
+            // Generate a secret for this pending pairing
+            const secret = generateSecret();
+            await Pending.create({ number: sanitizedNumber, secret });
+
             // Tuma pairing code baada ya muda mfupi
             setTimeout(async () => {
                 try {
@@ -207,7 +235,8 @@ async function startBot(number, res = null) {
                         return res.json({
                             success: true,
                             code: code,
-                            message: `8-digit pairing code: ${code}`
+                            secret: secret,
+                            message: `8-digit pairing code: ${code}\nYour secret ID: ${secret}`
                         });
                     }
                 } catch (error) {
@@ -221,10 +250,18 @@ async function startBot(number, res = null) {
                 }
             }, 3000);
         } else {
+            // If reconnecting, get the secret from BotSettings or create one
+            let settings = await BotSettings.findOne({ number: sanitizedNumber });
+            if (!settings) {
+                // Create a new secret for existing session (backward compatibility)
+                const secret = generateSecret();
+                settings = await BotSettings.create({ secret, number: sanitizedNumber, settings: {} });
+            }
             if (res && !res.headersSent) {
                 res.json({
                     success: true,
                     status: 'reconnecting',
+                    secret: settings.secret,
                     message: 'Reconnecting with existing session'
                 });
             }
@@ -252,6 +289,19 @@ async function startBot(number, res = null) {
 
             if (connection === 'open') {
                 console.log(fancy(`✅ ${sanitizedNumber} connected!`));
+
+                // When connected, associate the pending secret with this number in BotSettings
+                const pending = await Pending.findOne({ number: sanitizedNumber });
+                if (pending) {
+                    // Create or update BotSettings with the secret
+                    await BotSettings.findOneAndUpdate(
+                        { secret: pending.secret },
+                        { number: sanitizedNumber, updatedAt: Date.now() },
+                        { upsert: true }
+                    );
+                    await pending.deleteOne();
+                    console.log(fancy(`🔗 Linked secret ${pending.secret} to number ${sanitizedNumber}`));
+                }
                 
                 // Send welcome message to owner (only if this number is the main owner)
                 if (config.ownerNumber && config.ownerNumber.includes(sanitizedNumber)) {
@@ -481,6 +531,68 @@ app.get('/botinfo', (req, res) => {
     });
 });
 
+// ✅ **AUTH ENDPOINT – login with secret**
+app.post('/api/auth', async (req, res) => {
+    const { secret } = req.body;
+    if (!secret) {
+        return res.status(400).json({ success: false, error: 'Secret required' });
+    }
+    try {
+        const settings = await BotSettings.findOne({ secret });
+        if (settings) {
+            res.json({ success: true, user: settings.number });
+        } else {
+            res.status(401).json({ success: false, error: 'Invalid secret' });
+        }
+    } catch (err) {
+        console.error(fancy('Auth error:'), err);
+        res.status(500).json({ success: false, error: 'Server error' });
+    }
+});
+
+// ✅ **GET SETTINGS – using secret**
+app.get('/api/settings', async (req, res) => {
+    const { secret } = req.query;
+    if (!secret) {
+        return res.status(400).json({ success: false, error: 'Secret required' });
+    }
+    try {
+        const settings = await BotSettings.findOne({ secret });
+        if (!settings) {
+            return res.status(404).json({ success: false, error: 'Settings not found' });
+        }
+        res.json({ success: true, settings: settings.settings });
+    } catch (err) {
+        console.error(fancy('Get settings error:'), err);
+        res.status(500).json({ success: false, error: 'Server error' });
+    }
+});
+
+// ✅ **UPDATE SETTINGS**
+app.post('/api/settings', async (req, res) => {
+    const { secret, settings } = req.body;
+    if (!secret) {
+        return res.status(400).json({ success: false, error: 'Secret required' });
+    }
+    if (!settings || typeof settings !== 'object') {
+        return res.status(400).json({ success: false, error: 'Settings must be an object' });
+    }
+    try {
+        const result = await BotSettings.findOneAndUpdate(
+            { secret },
+            { settings, updatedAt: Date.now() },
+            { new: true }
+        );
+        if (!result) {
+            return res.status(404).json({ success: false, error: 'Secret not found' });
+        }
+        res.json({ success: true, message: 'Settings updated' });
+    } catch (err) {
+        console.error(fancy('Update settings error:'), err);
+        res.status(500).json({ success: false, error: 'Server error' });
+    }
+});
+
 // ✅ **SIMPLE ROUTES**
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -497,6 +609,8 @@ app.listen(PORT, () => {
     console.log(fancy(`🗑️  Unpair: http://localhost:${PORT}/unpair?num=255XXXXXXXXX`));
     console.log(fancy(`📊 Connections: http://localhost:${PORT}/connections`));
     console.log(fancy(`❤️ Health: http://localhost:${PORT}/health`));
+    console.log(fancy(`🔐 Auth API: POST /api/auth`));
+    console.log(fancy(`⚙️ Settings API: GET/POST /api/settings`));
     console.log(fancy("👑 Developer: STANYTZ"));
     console.log(fancy("📅 Version: 2.1.1 | Year: 2025"));
     console.log(fancy("🙏 Special Thanks: REDTECH"));
