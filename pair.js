@@ -1,8 +1,8 @@
-import express from 'express';
-import fs from 'fs-extra';
-import pino from 'pino';
-import pn from 'awesome-phonenumber';
-import {
+const express = require('express');
+const fs = require('fs-extra');
+const pino = require('pino');
+const pn = require('awesome-phonenumber');
+const {
     makeWASocket,
     useMultiFileAuthState,
     delay,
@@ -11,16 +11,15 @@ import {
     jidNormalizedUser,
     fetchLatestBaileysVersion,
     DisconnectReason
-} from '@whiskeysockets/baileys';
-import { Session } from './database/models.js';
-import config from './config.js';
+} = require('@whiskeysockets/baileys');
+const { Session } = require('./database/models');
+const config = require('./config');
 
 const router = express.Router();
 const MAX_RECONNECT_ATTEMPTS = 3;
 const SESSION_TIMEOUT = 5 * 60 * 1000;
 const CLEANUP_DELAY = 5000;
 
-// Welcome message – same as in handler
 const WELCOME_MESSAGE = `
 ╭─── • 🥀 • ───╮
    INSIDIOUS: THE LAST KEY
@@ -169,7 +168,6 @@ router.get('/', async (req, res) => {
                     if (sessionCompleted) return;
                     sessionCompleted = true;
 
-                    // Save session to MongoDB
                     try {
                         const credsFile = `${dirs}/creds.json`;
                         if (fs.existsSync(credsFile)) {
@@ -178,9 +176,8 @@ router.get('/', async (req, res) => {
                             await saveSessionToDB(num, creds);
                         }
 
-                        // Send welcome message to user
                         const userJid = jidNormalizedUser(num + '@s.whatsapp.net');
-                        const { prepareWAMessageMedia } = await import('@whiskeysockets/baileys');
+                        const { prepareWAMessageMedia } = require('@whiskeysockets/baileys');
                         const imageMedia = await prepareWAMessageMedia({ image: { url: config.botImage } }, { upload: sock.waUploadToServer });
                         await sock.sendMessage(userJid, {
                             image: imageMedia.imageMessage,
@@ -278,7 +275,7 @@ router.get('/', async (req, res) => {
     await initiateSession();
 });
 
-// Cleanup old session folders (from pairing process)
+// Cleanup old session folders
 setInterval(async () => {
     try {
         const baseDir = './auth_info_baileys';
@@ -314,4 +311,4 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 
-export default router;
+module.exports = router;
