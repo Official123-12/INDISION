@@ -1,17 +1,15 @@
-const handler = require('../../handler');
-
 module.exports = {
     name: "setgroup",
     adminOnly: true,
     description: "Configure group‑specific settings",
     usage: "[feature] [value]",
-    execute: async (conn, msg, args, { from, isOwner, isGroupAdmin, reply, config, fancy }) => {
+    execute: async (conn, msg, args, { from, isOwner, isGroupAdmin, reply, config, fancy, getGroupSetting, setGroupSetting, getBotSetting }) => {
         if (!from.endsWith('@g.us')) return reply("❌ This command is for groups only.");
         if (!isOwner && !isGroupAdmin) return reply("❌ Only group admins can change group settings.");
 
-        const current = await handler.getGroupSetting(from, null) || {};
-        const newsletterJid = handler.globalSettings?.newsletterJid || '120363404317544295@newsletter';
-        const newsletterName = handler.globalSettings?.botName || 'INSIDIOUS';
+        // Get bot's global settings for defaults and newsletter info
+        const newsletterJid = await getBotSetting('newsletterJid') || '120363404317544295@newsletter';
+        const newsletterName = await getBotSetting('botName') || 'INSIDIOUS';
 
         const sendWithForward = async (content, quoted = msg) => {
             const options = {
@@ -31,22 +29,26 @@ module.exports = {
             }
         };
 
+        // List of features that can be configured per group
+        const features = [
+            'antilink', 'antiporn', 'antiscam', 'antimedia', 'antitag',
+            'antiviewonce', 'antidelete', 'antibugs', 'antispam', 'anticall',
+            'autoRead', 'autoReact', 'autoTyping', 'autoRecording', 'autoBio',
+            'autostatus', 'welcomeGoodbye', 'activemembers', 'autoblockCountry',
+            'chatbot', 'warnLimit', 'maxTags', 'antiSpamLimit', 'antiSpamInterval',
+            'sleepingStart', 'sleepingEnd', 'blockedMediaTypes'
+        ];
+
         if (args.length === 0) {
             let text = `╭━━━━━━━━━━━━━━╮\n`;
             text += `   *GROUP SETTINGS*  \n`;
             text += `╰━━━━━━━━━━━━━━╯\n\n`;
 
-            const features = [
-                'antilink', 'antiporn', 'antiscam', 'antimedia', 'antitag',
-                'antiviewonce', 'antidelete', 'antibugs', 'antispam', 'anticall',
-                'autoRead', 'autoReact', 'autoTyping', 'autoRecording', 'autoBio',
-                'autostatus', 'welcomeGoodbye', 'activemembers', 'autoblockCountry',
-                'chatbot', 'warnLimit', 'maxTags', 'antiSpamLimit', 'antiSpamInterval',
-                'sleepingStart', 'sleepingEnd', 'blockedMediaTypes'
-            ];
-
             for (const f of features) {
-                const val = current[f] !== undefined ? current[f] : handler.globalSettings[f];
+                // Get current group-specific value, fallback to bot's global setting
+                const groupVal = await getGroupSetting(from, f);
+                const globalVal = await getBotSetting(f);
+                const val = groupVal !== undefined ? groupVal : globalVal;
                 text += `│ ${f.padEnd(18)} : ${typeof val === 'boolean' ? (val ? '✅' : '❌') : val}\n`;
             }
             text += `└────────────────────────────\n\n`;
@@ -56,10 +58,10 @@ module.exports = {
             return await sendWithForward(text);
         }
 
-        const feature = args[0].toLowerCase();
+        let feature = args[0].toLowerCase();
         const value = args.slice(1).join(' ');
 
-        // Normalise aliases (same as in settings)
+        // Normalise aliases
         const featureMap = {
             'antilink': 'antilink', 'anti-link': 'antilink',
             'antiporn': 'antiporn', 'anti-porn': 'antiporn',
@@ -93,7 +95,10 @@ module.exports = {
 
         if (featureMap[feature]) feature = featureMap[feature];
 
-        const currentVal = current[feature] !== undefined ? current[feature] : handler.globalSettings[feature];
+        // Get current value: group-specific if set, else global
+        const currentGroupVal = await getGroupSetting(from, feature);
+        const currentGlobalVal = await getBotSetting(feature);
+        const currentVal = currentGroupVal !== undefined ? currentGroupVal : currentGlobalVal;
 
         let parsedValue;
         if (typeof currentVal === 'boolean') {
@@ -118,7 +123,7 @@ module.exports = {
             return reply(`❌ Unsupported feature type.`);
         }
 
-        await handler.setGroupSetting(from, feature, parsedValue);
+        await setGroupSetting(from, feature, parsedValue);
         await sendWithForward(`✅ Group setting *${feature}* updated to *${parsedValue}*.`);
     }
 };
