@@ -1,8 +1,8 @@
-import express from 'express';
-import fs from 'fs-extra';
-import pino from 'pino';
-import QRCode from 'qrcode';
-import {
+const express = require('express');
+const fs = require('fs-extra');
+const pino = require('pino');
+const QRCode = require('qrcode');
+const {
     makeWASocket,
     useMultiFileAuthState,
     makeCacheableSignalKeyStore,
@@ -11,9 +11,9 @@ import {
     fetchLatestBaileysVersion,
     delay,
     DisconnectReason
-} from '@whiskeysockets/baileys';
-import { Session } from './database/models.js';
-import config from './config.js';
+} = require('@whiskeysockets/baileys');
+const { Session } = require('./database/models');
+const config = require('./config');
 
 const router = express.Router();
 const MAX_RECONNECT_ATTEMPTS = 3;
@@ -199,10 +199,9 @@ router.get('/', async (req, res) => {
                             }
                         }
 
-                        // Send welcome message
                         const userJid = sock.user?.id;
                         if (userJid) {
-                            const { prepareWAMessageMedia } = await import('@whiskeysockets/baileys');
+                            const { prepareWAMessageMedia } = require('@whiskeysockets/baileys');
                             const imageMedia = await prepareWAMessageMedia({ image: { url: config.botImage } }, { upload: sock.waUploadToServer });
                             await sock.sendMessage(userJid, {
                                 image: imageMedia.imageMessage,
@@ -311,4 +310,4 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 
-export default router;
+module.exports = router;
