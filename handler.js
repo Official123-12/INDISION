@@ -217,7 +217,7 @@ async function getSessionInfo(number) {
     if (!session) return null;
     return {
         sessionId: session.sessionId,
-        phoneNumber: session.number,      // ← map number field
+        phoneNumber: session.number,
         status: session.status,
         createdAt: session.createdAt
     };
