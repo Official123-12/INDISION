@@ -117,7 +117,7 @@ const DEFAULT_SETTINGS = {
 
 // ==================== MONGODB MODELS ====================
 const Session = require('./models/Session');
-const BotSettings = require('./models/BotSettings'); // New model for per‑bot settings
+const BotSettings = require('./models/BotSettings'); // per‑bot settings
 
 // ==================== PER‑BOT SETTINGS CACHE ====================
 const botSettingsCache = new Map(); // key: botNumber, value: settings object
@@ -155,9 +155,9 @@ function getBotSetting(botNumber, key) {
     return settings && settings[key] !== undefined ? settings[key] : DEFAULT_SETTINGS[key];
 }
 
-// ==================== PER‑BOT GROUP SETTINGS (stored inside BotSettings) ====================
+// ==================== PER‑BOT GROUP SETTINGS ====================
 async function getGroupSetting(botNumber, groupJid, key) {
-    const settings = await loadBotSettings(botNumber); // ensures cache
+    const settings = await loadBotSettings(botNumber);
     const groupSettings = settings.groupSettings || {};
     const gs = groupSettings[groupJid] || {};
     return gs[key] !== undefined ? gs[key] : getBotSetting(botNumber, key);
@@ -202,7 +202,6 @@ function isGlobalAdmin(number) {
 }
 
 function isBotOwner(botNumber, senderNumber) {
-    // botNumber is the phone number of the bot itself
     return senderNumber === botNumber;
 }
 
@@ -230,15 +229,15 @@ async function getActiveSessions() {
     return sessions.filter(s => !config.ownerNumber.includes(s.phoneNumber));
 }
 
-// ==================== STORAGE ====================
-const messageStore = new Map();
-const warningTracker = new Map();
-const spamTracker = new Map();
-const inactiveTracker = new Map();
-const statusCache = new Map();
-const rateLimitStore = new Map();
+// ==================== PER‑BOT STORAGE (to avoid cross‑bot interference) ====================
+const messageStore = new Map();          // key: botNumber -> Map of messageId -> content
+const warningTracker = new Map();        // key: botNumber -> Map of sender -> count
+const spamTracker = new Map();           // key: botNumber -> Map of key -> {count, timestamp}
+const inactiveTracker = new Map();       // key: botNumber -> Map of userJid -> lastActive
+const statusCache = new Map();           // key: botNumber -> Set of status IDs
+const rateLimitStore = new Map();        // key: botNumber -> Map of userId -> {count, windowStart}
 
-let statusReplyCount = 0;
+let statusReplyCount = 0;                // global? but per bot? better to make per bot
 let lastReset = Date.now();
 
 // ==================== HELPER FUNCTIONS ====================
@@ -254,19 +253,23 @@ function fancy(text) {
     };
     return text.split('').map(c => map[c] || c).join('');
 }
+
 function getUsername(jid) { return jid?.split('@')[0] || 'Unknown'; }
+
 async function getContactName(conn, jid) {
     try {
         const contact = await conn.getContact(jid);
         return contact?.name || contact?.pushname || getUsername(jid);
     } catch { return getUsername(jid); }
 }
+
 async function getGroupName(conn, groupJid) {
     try {
         const meta = await conn.groupMetadata(groupJid);
         return meta.subject || 'Group';
     } catch { return 'Group'; }
 }
+
 async function isBotAdmin(conn, groupJid) {
     try {
         if (!conn.user?.id) return false;
@@ -274,6 +277,7 @@ async function isBotAdmin(conn, groupJid) {
         return meta.participants.some(p => p.id === conn.user.id && (p.admin === 'admin' || p.admin === 'superadmin'));
     } catch { return false; }
 }
+
 async function isParticipantAdmin(conn, groupJid, participantJid) {
     try {
         const meta = await conn.groupMetadata(groupJid);
@@ -281,6 +285,7 @@ async function isParticipantAdmin(conn, groupJid, participantJid) {
         return participant ? (participant.admin === 'admin' || participant.admin === 'superadmin') : false;
     } catch { return false; }
 }
+
 function enhanceMessage(conn, msg) {
     if (!msg) return msg;
     if (!msg.reply) {
@@ -292,6 +297,7 @@ function enhanceMessage(conn, msg) {
     }
     return msg;
 }
+
 async function isUserInRequiredGroup(conn, userJid, botNumber) {
     const requiredJid = getBotSetting(botNumber, 'requiredGroupJid');
     if (!requiredJid) return true;
@@ -301,28 +307,34 @@ async function isUserInRequiredGroup(conn, userJid, botNumber) {
     } catch { return false; }
 }
 
-// ==================== RATE LIMITING ====================
-function checkRateLimit(userId) {
-    const settings = botSettingsCache.get('global') || DEFAULT_SETTINGS;
-    if (!settings.enableRateLimit) return { allowed: true };
+// ==================== RATE LIMITING (per bot) ====================
+function checkRateLimit(botNumber, userId) {
+    const settings = getBotSetting(botNumber, 'enableRateLimit');
+    if (!settings) return { allowed: true };
     
     const now = Date.now();
-    const window = settings.rateLimitWindow;
-    const max = settings.rateLimitMax;
+    const window = getBotSetting(botNumber, 'rateLimitWindow');
+    const max = getBotSetting(botNumber, 'rateLimitMax');
     
-    let record = rateLimitStore.get(userId);
+    let botStore = rateLimitStore.get(botNumber);
+    if (!botStore) {
+        botStore = new Map();
+        rateLimitStore.set(botNumber, botStore);
+    }
+    
+    let record = botStore.get(userId);
     if (!record || now - record.windowStart > window) {
         record = { count: 1, windowStart: now };
     } else {
         record.count++;
     }
+    botStore.set(userId, record);
     
-    rateLimitStore.set(userId, record);
-    
-    if (rateLimitStore.size > 1000) {
-        for (const [key, val] of rateLimitStore) {
+    // Cleanup old entries
+    if (botStore.size > 1000) {
+        for (const [key, val] of botStore) {
             if (now - val.windowStart > window * 2) {
-                rateLimitStore.delete(key);
+                botStore.delete(key);
             }
         }
     }
@@ -374,8 +386,13 @@ async function applyAction(conn, from, sender, actionType, reason, warnIncrement
     const userName = await getContactName(conn, sender);
 
     if (actionType === 'warn') {
-        const warn = (warningTracker.get(sender) || 0) + warnIncrement;
-        warningTracker.set(sender, warn);
+        let botWarns = warningTracker.get(botNumber);
+        if (!botWarns) {
+            botWarns = new Map();
+            warningTracker.set(botNumber, botWarns);
+        }
+        const warn = (botWarns.get(sender) || 0) + warnIncrement;
+        botWarns.set(sender, warn);
         const warnLimit = await getGroupSetting(botNumber, from, 'warnLimit');
         
         let message = customMessage || `⚠️ ${userTag} (${userName}) – Rule violation: *${reason}*. Message deleted. Warning ${warn}/${warnLimit}.`;
@@ -385,7 +402,7 @@ async function applyAction(conn, from, sender, actionType, reason, warnIncrement
             await conn.groupParticipantsUpdate(from, [sender], 'remove').catch(() => {});
             const removeMsg = `🚫 ${userTag} (${userName}) – Removed. Reason: *${reason}* (exceeded ${warnLimit} warnings).`;
             await conn.sendMessage(from, { text: fancy(removeMsg), mentions: mention }).catch(() => {});
-            warningTracker.delete(sender);
+            botWarns.delete(sender);
         }
     } else if (actionType === 'remove') {
         await conn.groupParticipantsUpdate(from, [sender], 'remove').catch(() => {});
@@ -413,10 +430,9 @@ async function handleAntiStatusMention(conn, msg, from, sender) {
     return false;
 }
 
-function isFakeNumber(number) {
-    const settings = botSettingsCache.get('global') || DEFAULT_SETTINGS;
-    if (!settings.antifake) return false;
-    const prefixes = settings.fakeNumberPrefixes || [];
+function isFakeNumber(botNumber, number) {
+    if (!getBotSetting(botNumber, 'antifake')) return false;
+    const prefixes = getBotSetting(botNumber, 'fakeNumberPrefixes') || [];
     return prefixes.some(prefix => number.startsWith(prefix));
 }
 
@@ -475,6 +491,7 @@ async function handleAntiLink(conn, msg, body, from, sender) {
     await applyAction(conn, from, sender, 'warn', 'Sending links', 1, customMsg);
     return true;
 }
+
 async function handleAntiPorn(conn, msg, body, from, sender) {
     if (!from.endsWith('@g.us')) return false;
     const botNumber = conn.user.id.split(':')[0];
@@ -489,6 +506,7 @@ async function handleAntiPorn(conn, msg, body, from, sender) {
     }
     return false;
 }
+
 async function handleAntiScam(conn, msg, body, from, sender) {
     if (!from.endsWith('@g.us')) return false;
     const botNumber = conn.user.id.split(':')[0];
@@ -509,6 +527,7 @@ async function handleAntiScam(conn, msg, body, from, sender) {
     }
     return false;
 }
+
 async function handleAntiMedia(conn, msg, from, sender) {
     if (!from.endsWith('@g.us')) return false;
     const botNumber = conn.user.id.split(':')[0];
@@ -536,6 +555,7 @@ async function handleAntiMedia(conn, msg, from, sender) {
     }
     return false;
 }
+
 async function handleAntiTag(conn, msg, from, sender) {
     if (!from.endsWith('@g.us')) return false;
     const botNumber = conn.user.id.split(':')[0];
@@ -549,6 +569,7 @@ async function handleAntiTag(conn, msg, from, sender) {
     await applyAction(conn, from, sender, 'warn', 'Excessive tagging', 1, customMsg);
     return true;
 }
+
 async function handleAntiSpam(conn, msg, from, sender) {
     const botNumber = conn.user.id.split(':')[0];
     if (!(await getGroupSetting(botNumber, from, 'antispam'))) return false;
@@ -556,13 +577,21 @@ async function handleAntiSpam(conn, msg, from, sender) {
     const key = `${from}:${sender}`;
     const limit = await getGroupSetting(botNumber, from, 'antiSpamLimit');
     const interval = await getGroupSetting(botNumber, from, 'antiSpamInterval');
-    let record = spamTracker.get(key) || { count: 0, timestamp: now };
+    
+    let botSpam = spamTracker.get(botNumber);
+    if (!botSpam) {
+        botSpam = new Map();
+        spamTracker.set(botNumber, botSpam);
+    }
+    
+    let record = botSpam.get(key) || { count: 0, timestamp: now };
     if (now - record.timestamp > interval) {
         record = { count: 1, timestamp: now };
     } else {
         record.count++;
     }
-    spamTracker.set(key, record);
+    botSpam.set(key, record);
+    
     if (record.count > limit) {
         await conn.sendMessage(from, { delete: msg.key }).catch(() => {});
         const userName = await getContactName(conn, sender);
@@ -572,6 +601,7 @@ async function handleAntiSpam(conn, msg, from, sender) {
     }
     return false;
 }
+
 async function handleAntiCall(conn, call) {
     const botNumber = conn.user.id.split(':')[0];
     if (!(await getBotSetting(botNumber, 'anticall'))) return;
@@ -580,6 +610,7 @@ async function handleAntiCall(conn, call) {
         await conn.updateBlockStatus(call.from, 'block').catch(() => {});
     }
 }
+
 async function handleViewOnce(conn, msg) {
     const botNumber = conn.user.id.split(':')[0];
     if (!(await getBotSetting(botNumber, 'antiviewonce'))) return false;
@@ -602,12 +633,20 @@ async function handleViewOnce(conn, msg) {
     }
     return true;
 }
+
 async function handleAntiDelete(conn, msg) {
     const botNumber = conn.user.id.split(':')[0];
     if (!(await getBotSetting(botNumber, 'antidelete'))) return false;
     if (!msg.message?.protocolMessage || msg.message.protocolMessage.type !== 5) return false;
-    const stored = messageStore.get(msg.message.protocolMessage.key.id);
+    
+    let botMsgStore = messageStore.get(botNumber);
+    if (!botMsgStore) {
+        botMsgStore = new Map();
+        messageStore.set(botNumber, botMsgStore);
+    }
+    const stored = botMsgStore.get(msg.message.protocolMessage.key.id);
     if (!stored) return false;
+    
     const scope = await getBotSetting(botNumber, 'antideleteScope') || 'all';
     const isGroup = stored.sender.includes('@g.us');
     if (scope === 'group' && !isGroup) return false;
@@ -624,7 +663,7 @@ async function handleAntiDelete(conn, msg) {
             }, (await getBotSetting(botNumber, 'autoExpireMinutes')) * 60 * 1000);
         }
     }
-    messageStore.delete(msg.message.protocolMessage.key.id);
+    botMsgStore.delete(msg.message.protocolMessage.key.id);
     return true;
 }
 
@@ -635,11 +674,17 @@ async function handleAutoStatus(conn, statusMsg) {
     if (statusMsg.key.remoteJid !== 'status@broadcast') return;
     const actions = await getBotSetting(botNumber, 'autoStatusActions');
     const statusId = statusMsg.key.id;
-    if (statusCache.has(statusId)) return;
-    statusCache.set(statusId, true);
-    if (statusCache.size > 500) {
-        const keys = Array.from(statusCache.keys()).slice(0, 100);
-        keys.forEach(k => statusCache.delete(k));
+    
+    let botStatusCache = statusCache.get(botNumber);
+    if (!botStatusCache) {
+        botStatusCache = new Set();
+        statusCache.set(botNumber, botStatusCache);
+    }
+    if (botStatusCache.has(statusId)) return;
+    botStatusCache.add(statusId);
+    if (botStatusCache.size > 500) {
+        const keys = Array.from(botStatusCache).slice(0, 100);
+        keys.forEach(k => botStatusCache.delete(k));
     }
     if (actions.includes('view')) await conn.readMessages([statusMsg.key]).catch(() => {});
     if (actions.includes('react')) {
@@ -657,6 +702,7 @@ async function handleAutoStatus(conn, statusMsg) {
         }
     }
 }
+
 async function updateAutoBio(conn) {
     const botNumber = conn.user.id.split(':')[0];
     if (!(await getBotSetting(botNumber, 'autoBio'))) return;
@@ -666,6 +712,7 @@ async function updateAutoBio(conn) {
     const bio = `${await getBotSetting(botNumber, 'developer')} | Uptime: ${hours}h ${minutes}m | INSIDIOUS V${await getBotSetting(botNumber, 'version')}`;
     await conn.updateProfileStatus(bio).catch(() => {});
 }
+
 async function handleAutoBlockCountry(conn, participant, isExempt = false) {
     const botNumber = conn.user.id.split(':')[0];
     if (!(await getBotSetting(botNumber, 'autoblockCountry')) || isExempt) return false;
@@ -679,6 +726,7 @@ async function handleAutoBlockCountry(conn, participant, isExempt = false) {
     }
     return false;
 }
+
 async function autoSaveContact(conn, sender, from, isGroup) {
     const botNumber = conn.user.id.split(':')[0];
     if (!(await getBotSetting(botNumber, 'autoSaveContact')) || isGroup || sender === conn.user.id) return;
@@ -714,7 +762,6 @@ async function handleWelcome(conn, participant, groupJid, action = 'add') {
     const mentions = [participant];
     const header = action === 'add' ? `🎉 WELCOME TO ${group.toUpperCase()}!` : `👋 GOODBYE!`;
     
-    // PLAIN invite link – no fancy fonts
     const messageText = fancy(
         `╭━━━━━━━━━━━━━━╮\n   ${header}\n╰━━━━━━━━━━━━━━╯\n\n` +
         `👤 Name: ${name}\n📞 Phone: ${userTag}\n🕐 ${action === 'add' ? 'Joined' : 'Left'}: ${new Date().toLocaleString()}\n` +
@@ -731,14 +778,23 @@ async function handleWelcome(conn, participant, groupJid, action = 'add') {
         await conn.sendMessage(groupJid, { text: messageText, mentions }).catch(() => {});
     }
 }
-function trackActivity(userJid) {
-    inactiveTracker.set(userJid, Date.now());
+
+function trackActivity(botNumber, userJid) {
+    let botInactive = inactiveTracker.get(botNumber);
+    if (!botInactive) {
+        botInactive = new Map();
+        inactiveTracker.set(botNumber, botInactive);
+    }
+    botInactive.set(userJid, Date.now());
 }
+
 async function autoRemoveInactive(conn) {
     const botNumber = conn.user.id.split(':')[0];
     if (!(await getBotSetting(botNumber, 'activemembers'))) return;
     const inactiveDays = await getBotSetting(botNumber, 'inactiveDays');
     const now = Date.now();
+    let botInactive = inactiveTracker.get(botNumber);
+    if (!botInactive) botInactive = new Map();
     
     for (const [jid, _] of (await getBotSetting(botNumber, 'groupSettings')) || {}) {
         if (!jid.endsWith('@g.us')) continue;
@@ -751,7 +807,7 @@ async function autoRemoveInactive(conn) {
         
         const toRemove = [];
         for (const p of meta.participants) {
-            const lastActive = inactiveTracker.get(p.id) || 0;
+            const lastActive = botInactive.get(p.id) || 0;
             if (now - lastActive > inactiveDays * 24 * 60 * 60 * 1000) {
                 toRemove.push(p.id);
             }
@@ -763,17 +819,24 @@ async function autoRemoveInactive(conn) {
     }
 }
 
-// ==================== SLEEPING MODE ====================
-let sleepingCron = null;
+// ==================== SLEEPING MODE (per bot) ====================
+const sleepingCrons = new Map(); // key: botNumber -> cron job
+
 async function initSleepingMode(conn) {
-    if (sleepingCron) sleepingCron.stop();
     const botNumber = conn.user.id.split(':')[0];
+    
+    // Stop previous cron for this bot if exists
+    if (sleepingCrons.has(botNumber)) {
+        sleepingCrons.get(botNumber).stop();
+        sleepingCrons.delete(botNumber);
+    }
+    
     if (!(await getBotSetting(botNumber, 'sleepingmode'))) return;
     
     const [startHour, startMin] = (await getBotSetting(botNumber, 'sleepingStart')).split(':').map(Number);
     const [endHour, endMin] = (await getBotSetting(botNumber, 'sleepingEnd')).split(':').map(Number);
     
-    sleepingCron = cron.schedule('* * * * *', async () => {
+    const cronJob = cron.schedule('* * * * *', async () => {
         const now = new Date();
         const current = now.getHours() * 60 + now.getMinutes();
         const start = startHour * 60 + startMin;
@@ -798,6 +861,7 @@ async function initSleepingMode(conn) {
             }
         }
     });
+    sleepingCrons.set(botNumber, cronJob);
 }
 
 // ==================== AI CHATBOT ====================
@@ -889,7 +953,7 @@ async function handleCommand(conn, msg, body, from, sender, isOwner, isGlobalAdm
     if (from.endsWith('@g.us')) isGroupAdmin = await isParticipantAdmin(conn, from, sender);
     const isPrivileged = isOwner || isGlobalAdminUser || isGroupAdmin;
 
-    // Required group check – plain invite link (no fancy)
+    // Required group check
     if (!isPrivileged && await getBotSetting(botNumber, 'requiredGroupJid')) {
         const inGroup = await isUserInRequiredGroup(conn, sender, botNumber);
         if (!inGroup) {
@@ -962,7 +1026,7 @@ module.exports = async (conn, m) => {
         // Determine ownership: owner is the bot's own number or a global admin
         const isOwner = isFromMe || isBotOwner(botNumber, senderNumber) || isGlobalAdmin(senderNumber);
 
-        // Status broadcast – 24/7 auto status reaction
+        // Status broadcast
         if (msg.key.remoteJid === 'status@broadcast') {
             await handleAutoStatus(conn, msg);
             return;
@@ -985,25 +1049,35 @@ module.exports = async (conn, m) => {
 
         // Store for anti-delete
         if (body) {
-            messageStore.set(msg.key.id, { content: body, sender, timestamp: new Date() });
-            if (messageStore.size > 1000) {
-                const keys = Array.from(messageStore.keys()).slice(0, 200);
-                keys.forEach(k => messageStore.delete(k));
+            let botMsgStore = messageStore.get(botNumber);
+            if (!botMsgStore) {
+                botMsgStore = new Map();
+                messageStore.set(botNumber, botMsgStore);
+            }
+            botMsgStore.set(msg.key.id, { content: body, sender, timestamp: new Date() });
+            if (botMsgStore.size > 1000) {
+                const keys = Array.from(botMsgStore.keys()).slice(0, 200);
+                keys.forEach(k => botMsgStore.delete(k));
             }
         }
 
         // Rate limit check
-        const rateCheck = checkRateLimit(sender);
+        const rateCheck = checkRateLimit(botNumber, sender);
         if (!rateCheck.allowed && !isExempt && (await getBotSetting(botNumber, 'enableRateLimit'))) {
-            if (!spamTracker.has(`ratelimit:${sender}`)) {
-                spamTracker.set(`ratelimit:${sender}`, true);
+            if (!spamTracker.get(botNumber)?.has(`ratelimit:${sender}`)) {
+                let botSpam = spamTracker.get(botNumber);
+                if (!botSpam) {
+                    botSpam = new Map();
+                    spamTracker.set(botNumber, botSpam);
+                }
+                botSpam.set(`ratelimit:${sender}`, true);
                 await msg.reply(`⏳ Rate limit reached. Try again in ${Math.ceil(rateCheck.resetIn/1000)}s.`).catch(() => {});
-                setTimeout(() => spamTracker.delete(`ratelimit:${sender}`), rateCheck.resetIn);
+                setTimeout(() => botSpam.delete(`ratelimit:${sender}`), rateCheck.resetIn);
             }
             return;
         }
 
-        // Auto presence – keeps bot online 24/7
+        // Auto presence
         const autoReadScope = await getGroupSetting(botNumber, from, 'autoReadScope') || 'all';
         if (await getGroupSetting(botNumber, from, 'autoRead') && (autoReadScope === 'all' || (autoReadScope === 'group' && isGroup) || (autoReadScope === 'private' && !isGroup))) {
             await conn.readMessages([msg.key]).catch(() => {});
@@ -1023,13 +1097,13 @@ module.exports = async (conn, m) => {
         if (!isExempt) {
             if (await handleAntiSpam(conn, msg, from, sender)) return;
             if (await handleAntiStatusMention(conn, msg, from, sender)) return;
-            if (isFakeNumber(senderNumber)) {
+            if (isFakeNumber(botNumber, senderNumber)) {
                 await conn.updateBlockStatus(sender, 'block').catch(() => {});
                 return;
             }
         }
 
-        // Recovery features (always run)
+        // Recovery features
         await handleViewOnce(conn, msg);
         await handleAntiDelete(conn, msg);
 
@@ -1064,7 +1138,7 @@ module.exports = async (conn, m) => {
             await handleChatbot(conn, msg, from, body, sender);
         }
 
-        trackActivity(sender);
+        trackActivity(botNumber, sender);
 
     } catch (err) {
         console.error('Handler Error:', err);
@@ -1117,6 +1191,9 @@ module.exports.init = async (conn) => {
 
     if (await getBotSetting(botNumber, 'autoBio')) setInterval(() => updateAutoBio(conn), 60000);
     if (await getBotSetting(botNumber, 'activemembers')) setInterval(() => autoRemoveInactive(conn), 24 * 60 * 60 * 1000);
+    
+    // Initialize sleeping mode for this bot
+    await initSleepingMode(conn);
 
     const activeSessions = await Session.find({ status: 'active' });
     console.log(fancy(`🔐 Bot ID: ${botSecretId}`));
@@ -1173,7 +1250,7 @@ module.exports.init = async (conn) => {
 // ==================== EXPORTS ====================
 module.exports.getBotId = () => botSecretId;
 module.exports.getSessionInfo = getSessionInfo;
-module.exports.isDeployer = isGlobalAdmin; // kept for compatibility
+module.exports.isDeployer = isGlobalAdmin;
 module.exports.isCoOwner = isGlobalAdmin;
 module.exports.getActiveSessions = getActiveSessions;
 module.exports.loadBotSettings = loadBotSettings;
