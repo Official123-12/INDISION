@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0a12">
+  <meta name="description" content="INSIDIOUS BOT - Manage your bot settings">
+  
+  <meta property="og:title" content="INSIDIOUS BOT • Settings">
+  <meta property="og:description" content="Configure your WhatsApp bot securely">
+  <meta property="og:image" content="https://raw.githubusercontent.com/Official123-12/STANYFREEBOT-/refs/heads/main/IMG_1377.jpeg">
+  
+  <title>INSIDIOUS BOT • Settings</title>
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --bg: #0a0a12;
+      --surface: rgba(255, 255, 255, 0.05);
+      --surface-hover: rgba(255, 255, 255, 0.08);
+      --border: rgba(255, 255, 255, 0.08);
+      --neon: #00ff88;
+      --neon2: #00cfff;
+      --text: #ffffff;
+      --text-muted: rgba(255, 255, 255, 0.5);
+      --danger: #ff5050;
+      --glass: blur(20px) saturate(180%);
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text);
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    body {
+      background: url('https://raw.githubusercontent.com/Official123-12/STANYFREEBOT-/refs/heads/main/IMG_1377.jpeg') center/cover fixed;
+      background-blend-mode: overlay;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at top, rgba(10, 10, 18, 0.7), rgba(10, 10, 18, 0.95));
+      z-index: 0;
+    }
+
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.5;
+    }
+
+    .orb-1 {
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(0, 255, 136, 0.2), transparent 70%);
+      top: -100px;
+      left: -100px;
+      animation: drift 20s ease-in-out infinite alternate;
+    }
+
+    .orb-2 {
+      width: 350px;
+      height: 350px;
+      background: radial-gradient(circle, rgba(0, 207, 255, 0.15), transparent 70%);
+      bottom: -100px;
+      right: -80px;
+      animation: drift 24s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes drift {
+      to { transform: translate(50px, 50px); }
+    }
+
+    #canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .container {
+      position: relative;
+      z-index: 10;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 20px;
+      background: rgba(0, 207, 255, 0.1);
+      border: 1px solid rgba(0, 207, 255, 0.2);
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--neon2);
+      margin-bottom: 20px;
+      backdrop-filter: blur(10px);
+    }
+
+    .brand {
+      text-align: center;
+      margin-bottom: 24px;
+      animation: fadeUp 0.6s ease;
+    }
+
+    .logo {
+      width: 80px;
+      height: 80px;
+      border-radius: 22px;
+      border: 2px solid var(--neon);
+      box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+      margin-bottom: 16px;
+      animation: pulse 3s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.3); }
+      50% { box-shadow: 0 0 50px rgba(0, 255, 136, 0.6); }
+    }
+
+    .title {
+      font-size: clamp(2rem, 6vw, 3rem);
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #fff, rgba(255, 255, 255, 0.7));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .title span {
+      background: linear-gradient(135deg, var(--neon), var(--neon2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    /* Card */
+    .card {
+      width: 100%;
+      background: var(--surface);
+      backdrop-filter: var(--glass);
+      -webkit-backdrop-filter: var(--glass);
+      border: 1px solid var(--border);
+      border-radius: 32px;
+      padding: 30px 24px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      animation: fadeUp 0.6s ease 0.1s both;
+    }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .card-title i {
+      color: var(--neon2);
+      font-size: 24px;
+    }
+
+    .card-hint {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    /* Input row */
+    .input-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .input-wrapper {
+      flex: 1;
+      position: relative;
+    }
+
+    .secret-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 16px 16px;
+      font-size: 16px;
+      color: var(--text);
+      outline: none;
+      transition: all 0.3s;
+    }
+
+    .secret-input:focus {
+      border-color: var(--neon2);
+      background: rgba(0, 207, 255, 0.05);
+      box-shadow: 0 0 0 4px rgba(0, 207, 255, 0.1);
+    }
+
+    .secret-input.error {
+      border-color: var(--danger);
+      background: rgba(255, 80, 80, 0.05);
+      animation: shake 0.3s;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+
+    .submit-btn {
+      padding: 0 24px;
+      background: linear-gradient(135deg, rgba(0, 207, 255, 0.2), rgba(0, 207, 255, 0.1));
+      border: 1px solid rgba(0, 207, 255, 0.3);
+      border-radius: 20px;
+      color: var(--neon2);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s;
+      white-space: nowrap;
+    }
+
+    .submit-btn:hover:not(:disabled) {
+      background: rgba(0, 207, 255, 0.25);
+      border-color: var(--neon2);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0, 207, 255, 0.2);
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Status area */
+    .status-area {
+      min-height: 44px;
+      margin-top: 16px;
+    }
+
+    .status-message {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      animation: fadeIn 0.3s;
+    }
+
+    .status-message.error { color: var(--danger); }
+    .status-message.success { color: var(--neon); }
+
+    .spinner-small {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(0, 207, 255, 0.2);
+      border-top-color: var(--neon2);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Settings grid */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .setting-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s;
+    }
+
+    .setting-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--neon2);
+    }
+
+    .setting-info h4 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .setting-info p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .toggle {
+      position: relative;
+      display: inline-block;
+      width: 52px;
+      height: 28px;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--border);
+      border-radius: 34px;
+      transition: 0.3s;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 22px;
+      width: 22px;
+      left: 3px;
+      bottom: 2px;
+      background-color: white;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+
+    input:checked + .slider {
+      background-color: var(--neon2);
+      border-color: var(--neon2);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(24px);
+    }
+
+    .save-btn {
+      width: 100%;
+      margin-top: 24px;
+      padding: 16px;
+      background: linear-gradient(135deg, var(--neon), var(--neon2));
+      border: none;
+      border-radius: 20px;
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .save-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0, 255, 136, 0.3);
+    }
+
+    .save-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .logout-btn {
+      background: rgba(255, 80, 80, 0.1);
+      border: 1px solid rgba(255, 80, 80, 0.3);
+      color: var(--danger);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-left: 12px;
+    }
+
+    .logout-btn:hover {
+      background: rgba(255, 80, 80, 0.2);
+      border-color: var(--danger);
+    }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    /* Back link */
+    .back-link {
+      margin-top: 28px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s;
+      animation: fadeUp 0.6s ease 0.3s both;
+    }
+
+    .back-link:hover {
+      color: var(--text);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      .container { padding: 16px; }
+      .card { padding: 24px 18px; }
+    }
+
+    @media (max-height: 600px) and (orientation: landscape) {
+      .container { padding: 10px; }
+      .logo { width: 60px; height: 60px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.01ms !important; }
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--neon2);
+      outline-offset: 2px;
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,207,255,0.3); border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <canvas id="canvas"></canvas>
+
+  <div class="container">
+    <div class="badge">
+      <i class="fa-solid fa-sliders"></i>
+      <span>BOT SETTINGS</span>
+    </div>
+
+    <div class="brand">
+      <img src="https://raw.githubusercontent.com/Official123-12/STANYFREEBOT-/refs/heads/main/IMG_1377.jpeg" class="logo" onerror="this.style.display='none'">
+      <h2 class="title">STANY<span>TZ</span></h2>
+      <div class="subtitle">Manage Your Bot</div>
+    </div>
+
+    <div class="card">
+      <!-- Login Section -->
+      <div id="loginSection">
+        <div class="card-title">
+          <i class="fa-solid fa-lock"></i>
+          <span>Enter Secret ID</span>
+        </div>
+        <div class="card-hint">
+          Enter the Secret ID you received after pairing your bot.
+        </div>
+        <div class="input-row">
+          <div class="input-wrapper">
+            <input type="text" id="secretInput" class="secret-input" placeholder="e.g., INS1A2B3C" maxlength="30">
+          </div>
+          <button id="loginBtn" class="submit-btn">
+            <i class="fa-solid fa-sign-in-alt"></i>
+            <span>Login</span>
+          </button>
+        </div>
+        <div id="loginStatus" class="status-area"></div>
+      </div>
+
+      <!-- Settings Management Section (hidden initially) -->
+      <div id="settingsSection" style="display: none;">
+        <div class="header-row">
+          <div class="card-title">
+            <i class="fa-solid fa-sliders"></i>
+            <span>Your Bot Settings</span>
+          </div>
+          <button id="logoutBtn" class="logout-btn"><i class="fa-solid fa-sign-out-alt"></i> Logout</button>
+        </div>
+        <div class="card-hint" id="loggedInInfo">
+          Logged in as: <strong id="userNumber">...</strong>
+        </div>
+
+        <div id="settingsGrid" class="settings-grid">
+          <!-- Settings will be loaded here -->
+          <div class="status-message"><div class="spinner-small"></div> Loading settings...</div>
+        </div>
+
+        <button id="saveSettingsBtn" class="save-btn">
+          <i class="fa-solid fa-save"></i> Save Settings
+        </button>
+        <div id="settingsStatus" class="status-area"></div>
+      </div>
+    </div>
+
+    <a href="/" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Home
+    </a>
+  </div>
+
+  <script>
+    // Disable right-click (optional)
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Particles animation (same as main)
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, particles = [];
+    let animFrame;
+
+    function initParticles() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+      const count = Math.min(Math.floor(width * height / 15000), 50);
+      particles = [];
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: (Math.random() - 0.5) * 0.3,
+          size: Math.random() * 2 + 1,
+          opacity: Math.random() * 0.3 + 0.1
+        });
+      }
+    }
+
+    function drawParticles() {
+      ctx.clearRect(0, 0, width, height);
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist < 120) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(0, 207, 255, ${0.1 * (1 - dist/120)})`;
+            ctx.stroke();
+          }
+        }
+        particles[i].x += particles[i].vx;
+        particles[i].y += particles[i].vy;
+        if (particles[i].x < 0 || particles[i].x > width) particles[i].vx *= -1;
+        if (particles[i].y < 0 || particles[i].y > height) particles[i].vy *= -1;
+        ctx.beginPath();
+        ctx.arc(particles[i].x, particles[i].y, particles[i].size, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(0, 207, 255, ${particles[i].opacity})`;
+        ctx.fill();
+      }
+      animFrame = requestAnimationFrame(drawParticles);
+    }
+
+    window.addEventListener('resize', () => {
+      clearTimeout(window.resizeTimer);
+      window.resizeTimer = setTimeout(() => {
+        cancelAnimationFrame(animFrame);
+        initParticles();
+        drawParticles();
+      }, 200);
+    });
+
+    initParticles();
+    drawParticles();
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) cancelAnimationFrame(animFrame);
+      else drawParticles();
+    });
+
+    // ========== SETTINGS LOGIC ==========
+    const loginSection = document.getElementById('loginSection');
+    const settingsSection = document.getElementById('settingsSection');
+    const secretInput = document.getElementById('secretInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const loginStatus = document.getElementById('loginStatus');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const userNumberSpan = document.getElementById('userNumber');
+    const settingsGrid = document.getElementById('settingsGrid');
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    const settingsStatus = document.getElementById('settingsStatus');
+
+    let currentSecret = localStorage.getItem('insidious_secret') || null;
+    let currentUser = localStorage.getItem('insidious_user') || null;
+
+    // If already logged in, show settings directly
+    if (currentSecret && currentUser) {
+      loginSection.style.display = 'none';
+      settingsSection.style.display = 'block';
+      userNumberSpan.textContent = currentUser;
+      loadSettings();
+    }
+
+    // Login handler
+    loginBtn.addEventListener('click', async () => {
+      const secret = secretInput.value.trim();
+      if (!secret) {
+        setStatus(loginStatus, 'Please enter your secret ID', 'error');
+        return;
+      }
+
+      setStatus(loginStatus, 'Logging in...', 'loading');
+      loginBtn.disabled = true;
+
+      try {
+        const response = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ secret })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          currentSecret = secret;
+          currentUser = data.user;
+          localStorage.setItem('insidious_secret', secret);
+          localStorage.setItem('insidious_user', data.user);
+
+          loginSection.style.display = 'none';
+          settingsSection.style.display = 'block';
+          userNumberSpan.textContent = data.user;
+          loadSettings();
+        } else {
+          setStatus(loginStatus, data.error || 'Invalid secret', 'error');
+        }
+      } catch (err) {
+        console.error('Login error:', err);
+        setStatus(loginStatus, 'Network error. Try again.', 'error');
+      } finally {
+        loginBtn.disabled = false;
+      }
+    });
+
+    // Logout handler
+    logoutBtn.addEventListener('click', () => {
+      localStorage.removeItem('insidious_secret');
+      localStorage.removeItem('insidious_user');
+      currentSecret = null;
+      currentUser = null;
+      settingsSection.style.display = 'none';
+      loginSection.style.display = 'block';
+      secretInput.value = '';
+      setStatus(loginStatus, '', '');
+    });
+
+    // Load settings from backend
+    async function loadSettings() {
+      if (!currentSecret) return;
+
+      setStatus(settingsStatus, 'Loading settings...', 'loading');
+      settingsGrid.innerHTML = '<div class="status-message"><div class="spinner-small"></div> Loading settings...</div>';
+
+      try {
+        const response = await fetch(`/api/settings?secret=${encodeURIComponent(currentSecret)}`);
+        const data = await response.json();
+
+        if (data.success) {
+          renderSettings(data.settings || {});
+          setStatus(settingsStatus, '', '');
+        } else {
+          setStatus(settingsStatus, data.error || 'Failed to load settings', 'error');
+          settingsGrid.innerHTML = '';
+        }
+      } catch (err) {
+        console.error('Load settings error:', err);
+        setStatus(settingsStatus, 'Network error. Could not load settings.', 'error');
+        settingsGrid.innerHTML = '';
+      }
+    }
+
+    // Render settings toggles (example features – customize as needed)
+    function renderSettings(settings) {
+      // Define available features with descriptions
+      const features = [
+        { key: 'antilink', label: 'Anti-Link', desc: 'Block links in groups' },
+        { key: 'antiporn', label: 'Anti-Porn', desc: 'Block adult content' },
+        { key: 'antiscam', label: 'Anti-Scam', desc: 'Detect scam messages' },
+        { key: 'antimedia', label: 'Anti-Media', desc: 'Block media types' },
+        { key: 'antitag', label: 'Anti-Tag', desc: 'Prevent mass tagging' },
+        { key: 'antiviewonce', label: 'Anti-ViewOnce', desc: 'Recover view-once media' },
+        { key: 'antidelete', label: 'Anti-Delete', desc: 'Recover deleted messages' },
+        { key: 'antispam', label: 'Anti-Spam', desc: 'Rate limiting' },
+        { key: 'anticall', label: 'Anti-Call', desc: 'Reject & block calls' },
+        { key: 'autoRead', label: 'Auto-Read', desc: 'Auto-read messages' },
+        { key: 'autoReact', label: 'Auto-React', desc: 'React to messages' },
+        { key: 'autoTyping', label: 'Auto-Typing', desc: 'Show typing indicator' },
+        { key: 'autoBio', label: 'Auto-Bio', desc: 'Update bio automatically' },
+        { key: 'autostatus', label: 'Auto-Status', desc: 'Interact with statuses' },
+        { key: 'welcomeGoodbye', label: 'Welcome/Goodbye', desc: 'Greet new members' },
+        { key: 'chatbot', label: 'Chatbot', desc: 'AI responses' }
+      ];
+
+      let html = '';
+      for (const feat of features) {
+        const value = settings[feat.key] !== undefined ? settings[feat.key] : true; // default true if not set
+        html += `
+          <div class="setting-item">
+            <div class="setting-info">
+              <h4>${feat.label}</h4>
+              <p>${feat.desc}</p>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" data-key="${feat.key}" ${value ? 'checked' : ''}>
+              <span class="slider"></span>
+            </label>
+          </div>
+        `;
+      }
+      settingsGrid.innerHTML = html;
+    }
+
+    // Save settings
+    saveSettingsBtn.addEventListener('click', async () => {
+      if (!currentSecret) return;
+
+      // Collect all toggle values
+      const checkboxes = settingsGrid.querySelectorAll('input[type="checkbox"]');
+      const newSettings = {};
+      checkboxes.forEach(cb => {
+        newSettings[cb.dataset.key] = cb.checked;
+      });
+
+      setStatus(settingsStatus, 'Saving...', 'loading');
+      saveSettingsBtn.disabled = true;
+
+      try {
+        const response = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ secret: currentSecret, settings: newSettings })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          setStatus(settingsStatus, 'Settings saved successfully!', 'success');
+        } else {
+          setStatus(settingsStatus, data.error || 'Save failed', 'error');
+        }
+      } catch (err) {
+        console.error('Save settings error:', err);
+        setStatus(settingsStatus, 'Network error. Could not save.', 'error');
+      } finally {
+        saveSettingsBtn.disabled = false;
+      }
+    });
+
+    // Helper to set status messages
+    function setStatus(element, message, type) {
+      if (!message) {
+        element.innerHTML = '';
+        return;
+      }
+      const icons = {
+        loading: '<div class="spinner-small"></div>',
+        error: '<i class="fa-solid fa-circle-exclamation"></i>',
+        success: '<i class="fa-solid fa-circle-check"></i>'
+      };
+      element.innerHTML = `<div class="status-message ${type}">${icons[type] || ''}<span>${message}</span></div>`;
+    }
+
+    // Handle Enter key on secret input
+    secretInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') loginBtn.click();
+    });
+  </script>
+</body>
+</html>
