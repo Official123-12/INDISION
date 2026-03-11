@@ -359,7 +359,21 @@
         .action-btn:hover { background: var(--primary); border-color: var(--primary); }
         .action-btn.delete:hover { background: var(--danger); border-color: var(--danger); }
 
-        /* Settings */
+        /* Settings – Login & Management */
+        #settingsLogin { margin-bottom: 1.5rem; }
+        #settingsManagement { display: none; }
+        .logged-in-info {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 1.2rem; padding: 0.8rem 1.2rem;
+            background: rgba(16,185,129,0.1); border-radius: 12px;
+            border: 1px solid rgba(16,185,129,0.3);
+        }
+        .logged-in-info span { font-size: 0.9rem; color: var(--success); }
+        .logout-btn {
+            background: transparent; border: 1px solid var(--danger); color: var(--danger);
+            padding: 0.35rem 1rem; border-radius: 8px; font-size: 0.8rem; cursor: pointer;
+        }
+        .logout-btn:hover { background: var(--danger); color: white; }
         .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap: 0.8rem; }
         .setting-item {
             display: flex; justify-content: space-between; align-items: center;
@@ -658,35 +672,34 @@
                         <i class="fas fa-arrow-left" aria-hidden="true"></i> Back
                     </button>
                 </div>
-                <div class="settings-grid">
-                    <div class="setting-item">
-                        <div class="setting-info"><h4>Anti-ViewOnce</h4><p>Recover view-once media</p></div>
-                        <label class="toggle"><input type="checkbox" id="setting-antiviewonce" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="setting-item">
-                        <div class="setting-info"><h4>Anti-Delete</h4><p>Recover deleted messages</p></div>
-                        <label class="toggle"><input type="checkbox" id="setting-antidelete" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="setting-item">
-                        <div class="setting-info"><h4>Auto-Read</h4><p>Auto-read messages</p></div>
-                        <label class="toggle"><input type="checkbox" id="setting-autoread" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="setting-item">
-                        <div class="setting-info"><h4>AI Chatbot</h4><p>Enable AI responses</p></div>
-                        <label class="toggle"><input type="checkbox" id="setting-chatbot" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="setting-item">
-                        <div class="setting-info"><h4>Anti-Link</h4><p>Block links in groups</p></div>
-                        <label class="toggle"><input type="checkbox" id="setting-antilink" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="setting-item">
-                        <div class="setting-info"><h4>Welcome Msg</h4><p>Send welcome/goodbye</p></div>
-                        <label class="toggle"><input type="checkbox" id="setting-welcome" checked><span class="slider"></span></label>
-                    </div>
+
+                <!-- Login Form (initially visible) -->
+                <div id="settingsLogin">
+                    <p style="color:var(--text-muted); margin-bottom:1rem"><i class="fas fa-info-circle" aria-hidden="true"></i> Please enter your Secret ID (the Session ID you received) to manage your bot settings.</p>
+                    <form id="loginForm" autocomplete="off">
+                        <div class="form-group">
+                            <label for="secretId">Secret ID</label>
+                            <input type="text" id="secretId" class="form-control" placeholder="e.g., INSABCDEF" required>
+                        </div>
+                        <button type="submit" class="btn" id="loginBtn">
+                            <i class="fas fa-sign-in-alt" aria-hidden="true"></i> Login
+                        </button>
+                    </form>
                 </div>
-                <button class="btn" onclick="saveSettings()" style="margin-top:1.3rem">
-                    <i class="fas fa-save" aria-hidden="true"></i> Save Settings
-                </button>
+
+                <!-- Settings Management (visible after login) -->
+                <div id="settingsManagement">
+                    <div class="logged-in-info">
+                        <span><i class="fas fa-check-circle" aria-hidden="true"></i> Logged in as: <strong id="loggedInUser">---</strong></span>
+                        <button class="logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt" aria-hidden="true"></i> Logout</button>
+                    </div>
+                    <div class="settings-grid" id="settingsGrid">
+                        <!-- Toggles will be populated via JS -->
+                    </div>
+                    <button class="btn" onclick="saveSettings()" style="margin-top:1.3rem">
+                        <i class="fas fa-save" aria-hidden="true"></i> Save Settings
+                    </button>
+                </div>
             </div>
         </section>
     </main>
@@ -831,7 +844,151 @@
             localStorage.setItem('user_sessions', JSON.stringify(sessions));
         }
 
-        // ===== API: PAIR =====
+        // ===== SETTINGS AUTH =====
+        let currentSecret = localStorage.getItem('current_secret') || null;
+        let currentUser = localStorage.getItem('current_user') || null; // could be phone number or session ID
+
+        // Show appropriate view based on login state
+        function updateSettingsUI() {
+            const loginDiv = document.getElementById('settingsLogin');
+            const manageDiv = document.getElementById('settingsManagement');
+            if (currentSecret) {
+                loginDiv.style.display = 'none';
+                manageDiv.style.display = 'block';
+                document.getElementById('loggedInUser').textContent = currentUser || 'Unknown';
+                loadSettings(); // load the user's settings
+            } else {
+                loginDiv.style.display = 'block';
+                manageDiv.style.display = 'none';
+            }
+        }
+
+        // Handle login form
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const secret = document.getElementById('secretId').value.trim();
+            const btn = document.getElementById('loginBtn');
+            if (!secret) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Verifying...';
+
+            try {
+                // Replace with your actual authentication endpoint
+                const res = await fetchWithTimeout('/api/auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ secret })
+                }, 8000);
+                const data = await res.json();
+
+                if (data && data.success) {
+                    currentSecret = secret;
+                    currentUser = data.user || secret; // store identifier (e.g., phone number)
+                    localStorage.setItem('current_secret', secret);
+                    localStorage.setItem('current_user', currentUser);
+                    showToast('Login successful', 'success');
+                    updateSettingsUI();
+                } else {
+                    showToast(data.error || 'Invalid secret ID', 'error');
+                }
+            } catch (err) {
+                console.error('Login error:', err);
+                showToast('Authentication failed. Try again.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sign-in-alt" aria-hidden="true"></i> Login';
+            }
+        });
+
+        function logout() {
+            currentSecret = null;
+            currentUser = null;
+            localStorage.removeItem('current_secret');
+            localStorage.removeItem('current_user');
+            updateSettingsUI();
+            showToast('Logged out', 'warning');
+        }
+
+        // Load settings from backend
+        async function loadSettings() {
+            if (!currentSecret) return;
+            try {
+                const res = await fetchWithTimeout(`/api/settings?secret=${encodeURIComponent(currentSecret)}`, {}, 5000);
+                const data = await res.json();
+                if (data && data.success) {
+                    renderSettings(data.settings);
+                } else {
+                    showToast('Failed to load settings', 'error');
+                }
+            } catch (err) {
+                console.error('Load settings error:', err);
+                showToast('Error loading settings', 'error');
+            }
+        }
+
+        // Render settings toggles
+        function renderSettings(settings) {
+            const grid = document.getElementById('settingsGrid');
+            // Define available settings (you can add more as needed)
+            const settingDefinitions = [
+                { id: 'antiviewonce', label: 'Anti-ViewOnce', desc: 'Recover view-once media', default: true },
+                { id: 'antidelete', label: 'Anti-Delete', desc: 'Recover deleted messages', default: true },
+                { id: 'autoread', label: 'Auto-Read', desc: 'Auto-read messages', default: true },
+                { id: 'chatbot', label: 'AI Chatbot', desc: 'Enable AI responses', default: true },
+                { id: 'antilink', label: 'Anti-Link', desc: 'Block links in groups', default: true },
+                { id: 'welcome', label: 'Welcome Msg', desc: 'Send welcome/goodbye', default: true }
+            ];
+            let html = '';
+            for (const def of settingDefinitions) {
+                const value = settings[def.id] !== undefined ? settings[def.id] : def.default;
+                html += `
+                    <div class="setting-item">
+                        <div class="setting-info"><h4>${def.label}</h4><p>${def.desc}</p></div>
+                        <label class="toggle"><input type="checkbox" id="setting-${def.id}" ${value ? 'checked' : ''}><span class="slider"></span></label>
+                    </div>
+                `;
+            }
+            grid.innerHTML = html;
+        }
+
+        // Save settings to backend
+        async function saveSettings() {
+            if (!currentSecret) return;
+            // Collect current values
+            const settings = {};
+            const checkboxes = document.querySelectorAll('#settingsGrid input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                const id = cb.id.replace('setting-', '');
+                settings[id] = cb.checked;
+            });
+            const btn = document.querySelector('#settingsManagement .btn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Saving...';
+
+            try {
+                const res = await fetchWithTimeout('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ secret: currentSecret, settings })
+                }, 5000);
+                const data = await res.json();
+                if (data && data.success) {
+                    showToast('Settings saved', 'success');
+                } else {
+                    showToast(data.error || 'Save failed', 'error');
+                }
+            } catch (err) {
+                console.error('Save settings error:', err);
+                showToast('Error saving settings', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        // ===== API: PAIR (with response validation) =====
         document.getElementById('pairForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const num = document.getElementById('pairNumber').value.trim();
@@ -854,6 +1011,8 @@
             try {
                 const res = await fetchWithTimeout(`/pair?num=${encodeURIComponent(num)}`, {}, 30000);
                 const data = await res.json();
+
+                if (!data || typeof data !== 'object') throw new Error('Invalid server response');
 
                 if (data.success) {
                     if (data.code) {
@@ -885,7 +1044,7 @@
             }
         });
 
-        // ===== API: DEPLOY =====
+        // ===== API: DEPLOY (with response validation) =====
         document.getElementById('deployForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const sessionId = document.getElementById('deploySession').value.trim();
@@ -911,6 +1070,8 @@
                     body: JSON.stringify({ sessionId, number })
                 }, 10000);
                 const data = await res.json();
+
+                if (!data || typeof data !== 'object') throw new Error('Invalid server response');
 
                 if (data.success) {
                     msgEl.innerHTML = `<strong>Bot deployed successfully!</strong><br>
@@ -949,6 +1110,9 @@
             try {
                 const res = await fetchWithTimeout('/sessions', {}, 5000);
                 const data = await res.json();
+
+                if (!data || typeof data !== 'object') throw new Error('Invalid server response');
+
                 if (data.success && data.sessions?.length) {
                     const userSessions = getUserSessionIds();
                     const mySessions = data.sessions.filter(s => userSessions.includes(s.sessionId));
@@ -964,12 +1128,12 @@
                         const statusIcon = s.status==='active'?'check-circle':s.status==='pending'?'clock':'times-circle';
                         const row = document.createElement('tr');
                         row.innerHTML = `
-                            <td><strong>${s.phoneNumber||'Unknown'}</strong></td>
-                            <td><code style="font-size:0.83rem;background:rgba(15,23,42,0.7);padding:0.18rem 0.35rem;border-radius:4px">${s.sessionId}</code></td>
-                            <td><span class="badge badge-${statusClass}"><i class="fas fa-${statusIcon}" aria-hidden="true"></i> ${s.status}</span></td>
+                            <td><strong>${s.phoneNumber || 'Unknown'}</strong></td>
+                            <td><code style="font-size:0.83rem;background:rgba(15,23,42,0.7);padding:0.18rem 0.35rem;border-radius:4px">${s.sessionId || ''}</code></td>
+                            <td><span class="badge badge-${statusClass}"><i class="fas fa-${statusIcon}" aria-hidden="true"></i> ${s.status || 'unknown'}</span></td>
                             <td><div class="action-btns">
                                 <button class="action-btn" title="Refresh" onclick="refreshSessions()"><i class="fas fa-sync" aria-hidden="true"></i></button>
-                                <button class="action-btn delete" title="Delete" onclick="deleteSession('${s.sessionId}')"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                                <button class="action-btn delete" title="Delete" onclick="deleteSession('${s.sessionId || ''}')"><i class="fas fa-trash" aria-hidden="true"></i></button>
                             </div></td>`;
                         tbody.appendChild(row);
                     });
@@ -993,6 +1157,9 @@
             try {
                 const res = await fetchWithTimeout(`/sessions/${id}`, { method: 'DELETE' }, 5000);
                 const data = await res.json();
+
+                if (!data || typeof data !== 'object') throw new Error('Invalid server response');
+
                 if (data.success) { 
                     removeUserSessionId(id);
                     showToast(`Session ${id} deleted`, 'warning'); 
@@ -1010,37 +1177,6 @@
             }
         }
 
-        // ===== API: SETTINGS =====
-        function saveSettings() {
-            const settings = {
-                antiviewonce: document.getElementById('setting-antiviewonce').checked,
-                antidelete: document.getElementById('setting-antidelete').checked,
-                autoread: document.getElementById('setting-autoread').checked,
-                chatbot: document.getElementById('setting-chatbot').checked,
-                antilink: document.getElementById('setting-antilink').checked,
-                welcome: document.getElementById('setting-welcome').checked,
-                timestamp: new Date().toISOString()
-            };
-            fetchWithTimeout('/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(settings)
-            }, 5000).then(r=>r.json()).then(d=>{
-                if(d.success) {
-                    showToast('Settings saved', 'success');
-                    showSection('dashboard');
-                } else {
-                    showToast(d.error || 'Save failed', 'error');
-                }
-            }).catch(err => {
-                if (err.name === 'AbortError') {
-                    showToast('Request timed out', 'error');
-                } else {
-                    showToast('Network error - settings not saved', 'error');
-                }
-            });
-        }
-
         // ===== HEALTH CHECK =====
         async function checkHealth() {
             try {
@@ -1048,7 +1184,7 @@
                 const data = await res.json();
                 const statusEl = document.getElementById('botStatus');
                 const dot = statusEl.previousElementSibling;
-                if (data.status === 'healthy' || data.connected) {
+                if (data && typeof data === 'object' && (data.status === 'healthy' || data.connected)) {
                     statusEl.textContent = 'Online';
                     dot.style.background = 'var(--success)';
                 } else {
@@ -1072,6 +1208,9 @@
                 input.addEventListener('focus', function() { this.parentElement.style.transform='scale(1.01)'; this.parentElement.style.transition='transform 0.2s'; });
                 input.addEventListener('blur', function() { this.parentElement.style.transform='scale(1)'; });
             });
+
+            // Initialize settings login state
+            updateSettingsUI();
 
             console.log('%cINSIDIOUS BOT v3.0', 'color:#7c3aed;font-weight:bold;font-size:13px');
         }
