@@ -349,6 +349,13 @@
       color: #fff;
     }
 
+    /* Settings card variant (new) */
+    .card-settings .card-icon {
+      background: rgba(162, 89, 255, 0.1);
+      border-color: rgba(162, 89, 255, 0.2);
+      color: var(--accent);
+    }
+
     /* Footer */
     .footer {
       margin-top: 30px;
@@ -515,6 +522,20 @@
         <div class="card-content">
           <div class="card-title">Pair Code</div>
           <div class="card-desc">Link via phone number</div>
+        </div>
+        <span class="card-arrow">
+          <i class="fa-solid fa-arrow-right"></i>
+        </span>
+      </a>
+
+      <!-- New Settings Card -->
+      <a href="/settings.html" class="card card-settings">
+        <div class="card-icon">
+          <i class="fa-solid fa-sliders"></i>
+        </div>
+        <div class="card-content">
+          <div class="card-title">Bot Settings</div>
+          <div class="card-desc">Configure your bot</div>
         </div>
         <span class="card-arrow">
           <i class="fa-solid fa-arrow-right"></i>
