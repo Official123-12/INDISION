@@ -8,35 +8,28 @@ module.exports = {
     name: "menu",
     execute: async (conn, msg, args, { from, sender, pushname }) => {
         try {
-            // ========== 🎯 REAL USERNAME FETCHER (English Only) ==========
+            // ========== GET REAL USERNAME ==========
             const userNumber = sender.split('@')[0];
             let userName = pushname?.trim() || '';
-            
             if (!userName || userName === 'undefined') {
                 try {
-                    const contact = conn.contactStore?.contacts?.[sender] || await conn.getContact(sender);
-                    userName = contact?.name || contact?.pushname || contact?.verifiedName || '';
+                    const contact = await conn.getContact(sender);
+                    userName = contact?.name || contact?.pushname || '';
                 } catch {}
             }
-            if (!userName || userName === 'undefined') {
+            if (!userName && from.endsWith('@g.us')) {
                 try {
-                    const groupMetadata = from.endsWith('@g.us') ? await conn.groupMetadata(from) : null;
-                    const participant = groupMetadata?.participants?.find(p => p.id === sender);
+                    const groupMeta = await conn.groupMetadata(from);
+                    const participant = groupMeta.participants.find(p => p.id === sender);
                     userName = participant?.name || '';
                 } catch {}
             }
-            userName = userName?.trim() || `User_${userNumber.slice(-4)}`;
-            const userDisplay = `@${userNumber}`;
+            userName = userName.trim() || `User_${userNumber.slice(-4)}`;
             const mentions = [sender];
 
-            // ========== 📱 DEVICE COMPATIBILITY ==========
-            const clientInfo = msg?.message?.conversation || msg?.message?.extendedTextMessage?.text || '';
-            const isOldClient = clientInfo.length < 2;
-            const maxButtons = isOldClient ? 3 : 6;
-
-            // ========== 🗂️ SCAN COMMANDS ==========
+            // ========== COMMAND SCAN ==========
             const cmdPath = path.join(__dirname, '../../commands');
-            const allCategories = fs.readdirSync(cmdPath).filter(cat => 
+            const allCategories = fs.readdirSync(cmdPath).filter(cat =>
                 fs.statSync(path.join(cmdPath, cat)).isDirectory()
             );
 
@@ -48,39 +41,39 @@ module.exports = {
             }
 
             const categories = targetCategory ? [targetCategory] : allCategories;
-            const cards = [];
 
-            // ========== 🖼️ HEADER IMAGE ==========
+            // ========== OPTIONAL HEADER IMAGE ==========
             let imageMedia = null;
-            if (config.menuImage && !isOldClient) {
+            if (config.menuImage) {
                 try {
                     imageMedia = await prepareWAMessageMedia(
                         { image: { url: config.menuImage } },
                         { upload: conn.waUploadToServer }
                     );
-                } catch (e) {
-                    console.warn("⚠️ Menu image skipped:", e.message);
-                }
+                } catch (e) {}
             }
 
-            // ========== 🎨 PREMIUM BUTTON FACTORY ==========
-            const createPremiumButton = (text, id, icon = '▸') => ({
+            // ========== BUTTON FACTORY ==========
+            const cmdButton = (cmdName, icon = '▸') => ({
+                name: "quick_reply",
+                buttonParamsJson: JSON.stringify({
+                    display_text: `${icon} ${cmdName}`,
+                    id: `${config.prefix}${cmdName}`
+                })
+            });
+
+            const navButton = (text, id, icon) => ({
                 name: "quick_reply",
                 buttonParamsJson: JSON.stringify({
                     display_text: `${icon} ${text}`,
-                    id: `${config.prefix}${id.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}`
+                    id: id
                 })
             });
 
-            const createNavButton = (text, id, icon) => ({
-                name: "quick_reply", 
-                buttonParamsJson: JSON.stringify({
-                    display_text: `${icon} ${text}`,
-                    id: `${config.prefix}${id}`
-                })
-            });
+            // ========== BUILD CARDS ==========
+            const cards = [];
+            const BUTTONS_PER_PAGE = 4; // Keep card short
 
-            // ========== 🔄 BUILD CAROUSEL CARDS ==========
             for (const cat of categories) {
                 const catPath = path.join(cmdPath, cat);
                 let files = fs.readdirSync(catPath)
@@ -90,11 +83,10 @@ module.exports = {
 
                 if (files.length === 0) continue;
 
-                // 📏 DYNAMIC PAGINATION
-                const buttonsPerPage = files.length <= 3 ? 3 : maxButtons;
+                // Paginate
                 const pages = [];
-                for (let i = 0; i < files.length; i += buttonsPerPage) {
-                    pages.push(files.slice(i, i + buttonsPerPage));
+                for (let i = 0; i < files.length; i += BUTTONS_PER_PAGE) {
+                    pages.push(files.slice(i, i + BUTTONS_PER_PAGE));
                 }
 
                 const startPage = (targetCategory === cat) ? targetPage : 0;
@@ -102,142 +94,139 @@ module.exports = {
                 pages.forEach((pageFiles, pageIndex) => {
                     if (targetCategory === cat && pageIndex !== startPage) return;
 
-                    // 🎨 PREMIUM BUTTONS with rotating icons
-                    const buttons = pageFiles.map((cmd, idx) => {
-                        const icons = ['⚡','🎯','🔧','✨','🚀','💎','🔥','🌟'];
-                        const icon = icons[idx % icons.length];
-                        return createPremiumButton(cmd, cmd, icon);
-                    });
+                    // Command buttons with rotating icons
+                    const icons = ['⚡', '🎯', '🔧', '✨', '🚀', '💎', '🔥', '🌟'];
+                    const buttons = pageFiles.map((cmd, idx) =>
+                        cmdButton(cmd, icons[idx % icons.length])
+                    );
 
-                    // 🧭 NAVIGATION
+                    // Navigation buttons
+                    const navs = [];
                     if (pages.length > 1) {
                         if (pageIndex > 0) {
-                            buttons.push(createNavButton(`Back`, `nav ${cat} ${pageIndex - 1}`, '◀'));
+                            navs.push(navButton('Back', `${config.prefix}nav ${cat} ${pageIndex - 1}`, '◀'));
                         }
                         if (pageIndex < pages.length - 1) {
-                            buttons.push(createNavButton(`Next`, `nav ${cat} ${pageIndex + 1}`, '▶'));
+                            navs.push(navButton('Next', `${config.prefix}nav ${cat} ${pageIndex + 1}`, '▶'));
                         }
-                        buttons.push(createNavButton(`🏠 Home`, `menu`, '🏠'));
+                        navs.push(navButton('Home', `${config.prefix}menu`, '🏠'));
                     }
 
-                    // 📏 DYNAMIC CARD HEIGHT
-                    const paddingLines = pageFiles.length < 4 ? '\n\n' : '\n';
-                    const categoryTitle = pages.length > 1 
-                        ? `${cat.toUpperCase()} • Page ${pageIndex + 1}/${pages.length}`
-                        : cat.toUpperCase();
+                    const allButtons = [...buttons, ...navs];
 
-                    // 💎 CARD BODY - ENGLISH ONLY
-                    const cardBody = `╭━━━ ✦ ✦ ✦ ━━━╮
-   ✨ ${categoryTitle}
-╰━━━ ✦ ✦ ✦ ━━━╯${paddingLines}👤 ${userName} ${userDisplay}
-📌 Select a command below:${paddingLines}`;
+                    // Card content (short and elegant)
+                    const pageInfo = pages.length > 1 ? ` • Page ${pageIndex + 1}/${pages.length}` : '';
+                    const bodyText = 
+`╭─── • 🥀 • ───╮
+   ✦ *${cat.toUpperCase()}* ✦
+╰─── • 🥀 • ───╯
+
+👤 ${userName}
+📌 Choose a command:`;
 
                     const card = {
-                        body: { text: fancy(cardBody) },
-                        footer: { 
-                            text: fancy(`━━━ ✦ ✦ ✦ ━━━\n👑 Developer: ${config.developerName} • v2.2`) 
-                        },
+                        body: { text: fancy(bodyText) },
+                        footer: { text: fancy(`━━━━━━━━━━━━━━━\n👑 ${config.developerName} • v2.2`) },
                         header: imageMedia ? {
                             hasMediaAttachment: true,
                             imageMessage: imageMedia.imageMessage
                         } : {
                             hasMediaAttachment: false,
-                            title: fancy(`🤖 ${config.botName}`)
+                            title: fancy(`✨ ${config.botName} ✨`)
                         },
-                        nativeFlowMessage: { buttons }
+                        nativeFlowMessage: { buttons: allButtons }
                     };
                     cards.push(card);
                 });
             }
 
-            // ========== 🎪 MAIN DASHBOARD ==========
+            // ========== MAIN DASHBOARD CARD ==========
             const stats = {
-                cmds: cards.reduce((sum, c) => sum + (c.nativeFlowMessage?.buttons?.length || 0), 0),
+                cmds: cards.reduce((s, c) => s + (c.nativeFlowMessage?.buttons?.length || 0), 0),
                 cats: categories.length,
                 uptime: runtime(process.uptime())
             };
 
-            const mainHeader = `╭━━━ ✦ INSIDIOUS ✦ ━━━╮
-   👁 V2.2 • PREMIUM EDITION
-╰━━━ ✦ ✦ ✦ ━━━╯
+            const mainHeader =
+`╭─── • 🥀 • ───╮
+   ✦ *ɪɴꜱɪᴅɪᴏᴜꜱ ᴠ2.2* ✦
+╰─── • 🥀 • ───╯
 
-⚡ ${stats.cmds}+ Commands Available
-📂 ${stats.cats} Categories
-⏱️ Uptime: ${stats.uptime}
+⚡ ${stats.cmds}+ commands
+📂 ${stats.cats} categories
+⏱️ ${stats.uptime} uptime
 
-🔍 Tip: Type ${config.prefix}search <keyword>`;
+👤 ${userName}
+➡️ Swipe left/right`;
 
-            // ========== 📲 SEND INTERACTIVE MESSAGE ==========
-            const interactiveMessage = {
+            const mainCard = {
                 body: { text: fancy(mainHeader) },
-                footer: { 
-                    text: fancy(`🔄 Swipe ← → for more • ${config.prefix}help for guide`) 
-                },
+                footer: { text: fancy(`━━━━━━━━━━━━━━━\n📱 ${config.prefix}help for guide`) },
                 header: {
-                    title: fancy(`🌟 ${config.botName}`),
                     hasMediaAttachment: false,
-                    subtitle: fancy('Premium WhatsApp Bot')
+                    title: fancy(`🌟 ${config.botName} 🌟`)
+                },
+                nativeFlowMessage: {
+                    buttons: [
+                        navButton('Browse', `${config.prefix}menu nav ${categories[0]} 0`, '📂')
+                    ]
+                }
+            };
+            cards.unshift(mainCard); // Make it the first card
+
+            // ========== SEND CAROUSEL ==========
+            const interactiveMessage = {
+                body: { text: fancy('✨ *Premium Menu* ✨') },
+                footer: { text: fancy('◀️  Swipe for more  •  .help  ▶️') },
+                header: {
+                    title: fancy(`🤖 ${config.botName}`),
+                    hasMediaAttachment: false
                 },
                 carouselMessage: {
-                    cards: cards,
+                    cards: cards.slice(0, 10), // WhatsApp limit 10 cards
                     messageVersion: 1
                 }
             };
 
-            const messageContent = { interactiveMessage };
-            const waMessage = generateWAMessageFromContent(from, messageContent, {
+            const waMsg = generateWAMessageFromContent(from, { interactiveMessage }, {
                 userJid: conn.user.id,
                 upload: conn.waUploadToServer
             });
-            
-            await conn.relayMessage(from, waMessage.message, { 
-                messageId: waMessage.key.id, 
-                mentions 
-            });
+            await conn.relayMessage(from, waMsg.message, { messageId: waMsg.key.id, mentions });
 
         } catch (e) {
-            console.error("❌ Menu Error:", e);
-            
-            // ========== 🆘 FALLBACK: UNIVERSAL TEXT MENU (ENGLISH) ==========
+            console.error('Menu error:', e);
+            // Fallback plain text menu
             const userNumber = sender.split('@')[0];
             let userName = pushname || `User_${userNumber.slice(-4)}`;
             try {
                 const contact = await conn.getContact(sender);
                 userName = contact?.name || contact?.pushname || userName;
             } catch {}
+            let text = 
+`╭─── • 🥀 • ───╮
+   ✦ *INSIDIOUS MENU* ✦
+╰─── • 🥀 • ───╯
 
-            let text = `╭━━━ ✦ INSIDIOUS ✦ ━━━╮
-   📜 PREMIUM MENU • V2.2
-╰━━━ ✦ ✦ ✦ ━━━╯
-
-👤 ${userName} @${userNumber}
-⏱️ Uptime: ${runtime(process.uptime())}
+👤 ${userName}
+⏱️ ${runtime(process.uptime())}
 
 `;
             const cmdPath = path.join(__dirname, '../../commands');
-            const categories = fs.readdirSync(cmdPath).filter(cat => 
-                fs.statSync(path.join(cmdPath, cat)).isDirectory()
+            const cats = fs.readdirSync(cmdPath).filter(c =>
+                fs.statSync(path.join(cmdPath, c)).isDirectory()
             );
-            
-            for (const cat of categories) {
-                const catPath = path.join(cmdPath, cat);
-                const files = fs.readdirSync(catPath)
+            for (const cat of cats) {
+                const files = fs.readdirSync(path.join(cmdPath, cat))
                     .filter(f => f.endsWith('.js'))
                     .map(f => f.replace('.js', ''));
                 if (files.length) {
-                    text += `✦ ${cat.toUpperCase()} [${files.length} commands]\n`;
-                    text += files.map(cmd => `  ${config.prefix}${cmd}`).join('\n') + '\n\n';
+                    text += `✦ *${cat.toUpperCase()}*\n`;
+                    text += files.map(c => `  ${config.prefix}${c}`).join(' · ') + '\n\n';
                 }
             }
-            text += `━━━ ✦ ✦ ✦ ━━━
-👑 Developer: ${config.developerName}
-💡 Tip: Use ${config.prefix}search <command_name>`;
-            
-            await conn.sendMessage(from, { 
-                text: fancy(text), 
-                mentions: [sender] 
-            }, { quoted: msg });
+            text += `━━━━━━━━━━━━━━━\n👑 ${config.developerName}`;
+            await conn.sendMessage(from, { text: fancy(text), mentions: [sender] }, { quoted: msg });
         }
     }
 };
-
