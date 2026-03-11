@@ -13,14 +13,12 @@ import {
     DisconnectReason
 } from '@whiskeysockets/baileys';
 import { Session } from './database/models.js';
-import handler from './handler.js';
 import config from './config.js';
 
 const router = express.Router();
 const MAX_RECONNECT_ATTEMPTS = 3;
 const SESSION_TIMEOUT = 60000;
 
-// Same welcome message
 const WELCOME_MESSAGE = `
 ╭─── • 🥀 • ───╮
    INSIDIOUS: THE LAST KEY
@@ -212,9 +210,7 @@ router.get('/', async (req, res) => {
                             });
                         }
 
-                        if (handler && handler.init) {
-                            await handler.init(sock);
-                        }
+                        console.log(`🎉 Bot for ${sock.user?.id?.split(':')[0]} paired via QR and session saved.`);
                     } catch (err) {
                         console.error('Error sending welcome or saving session:', err);
                     } finally {
@@ -293,7 +289,7 @@ setInterval(async () => {
             try {
                 const stats = await fs.stat(sessionPath);
                 if (now - stats.mtimeMs > 300000) {
-                    console.log(`🗑️ Removing old session: ${session}`);
+                    console.log(`🗑️ Removing old QR session: ${session}`);
                     await fs.remove(sessionPath);
                 }
             } catch (e) {}
