@@ -30,7 +30,7 @@ function fancy(text) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ **MONGODB CONNECTION**
+// ✅ **MONGODB CONNECTION (MUST SUCCEED)**
 console.log(fancy("🔗 Connecting to MongoDB..."));
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://sila_md:sila0022@sila.67mxtd7.mongodb.net/insidious?retryWrites=true&w=majority";
 
@@ -43,6 +43,7 @@ mongoose.connect(MONGODB_URI, {
 .catch((err) => {
     console.log(fancy("❌ MongoDB Connection FAILED"));
     console.log(fancy("💡 Error: " + err.message));
+    process.exit(1); // Exit if database fails – required
 });
 
 // ✅ **ACTIVE SOCKETS MAP**
