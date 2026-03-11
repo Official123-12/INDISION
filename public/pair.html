@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0a12">
+  <meta name="description" content="STANY PAIRING - Pair Code">
+  
+  <meta property="og:title" content="STANY TZ • Pair Code">
+  <meta property="og:description" content="Enter your phone number to get pairing code">
+  <meta property="og:image" content="https://raw.githubusercontent.com/Official123-12/STANYFREEBOT-/refs/heads/main/IMG_1377.jpeg">
+  
+  <title>STANY TZ • Pair Code</title>
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --bg: #0a0a12;
+      --surface: rgba(255, 255, 255, 0.05);
+      --surface-hover: rgba(255, 255, 255, 0.08);
+      --border: rgba(255, 255, 255, 0.08);
+      --neon: #00ff88;
+      --neon2: #00cfff;
+      --text: #ffffff;
+      --text-muted: rgba(255, 255, 255, 0.5);
+      --danger: #ff5050;
+      --glass: blur(20px) saturate(180%);
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text);
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    body {
+      background: url('https://raw.githubusercontent.com/Official123-12/STANYFREEBOT-/refs/heads/main/IMG_1377.jpeg') center/cover fixed;
+      background-blend-mode: overlay;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at top, rgba(10, 10, 18, 0.7), rgba(10, 10, 18, 0.95));
+      z-index: 0;
+    }
+
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.5;
+    }
+
+    .orb-1 {
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(0, 255, 136, 0.2), transparent 70%);
+      top: -100px;
+      left: -100px;
+      animation: drift 20s ease-in-out infinite alternate;
+    }
+
+    .orb-2 {
+      width: 350px;
+      height: 350px;
+      background: radial-gradient(circle, rgba(0, 207, 255, 0.15), transparent 70%);
+      bottom: -100px;
+      right: -80px;
+      animation: drift 24s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes drift {
+      to { transform: translate(50px, 50px); }
+    }
+
+    #canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .container {
+      position: relative;
+      z-index: 10;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 20px;
+      background: rgba(0, 207, 255, 0.1);
+      border: 1px solid rgba(0, 207, 255, 0.2);
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--neon2);
+      margin-bottom: 20px;
+      backdrop-filter: blur(10px);
+    }
+
+    .brand {
+      text-align: center;
+      margin-bottom: 24px;
+      animation: fadeUp 0.6s ease;
+    }
+
+    .logo {
+      width: 80px;
+      height: 80px;
+      border-radius: 22px;
+      border: 2px solid var(--neon);
+      box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+      margin-bottom: 16px;
+      animation: pulse 3s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.3); }
+      50% { box-shadow: 0 0 50px rgba(0, 255, 136, 0.6); }
+    }
+
+    .title {
+      font-size: clamp(2rem, 6vw, 3rem);
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #fff, rgba(255, 255, 255, 0.7));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .title span {
+      background: linear-gradient(135deg, var(--neon), var(--neon2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    /* Card */
+    .card {
+      width: 100%;
+      background: var(--surface);
+      backdrop-filter: var(--glass);
+      -webkit-backdrop-filter: var(--glass);
+      border: 1px solid var(--border);
+      border-radius: 32px;
+      padding: 30px 24px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      animation: fadeUp 0.6s ease 0.1s both;
+    }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .card-title i {
+      color: var(--neon2);
+      font-size: 24px;
+    }
+
+    .card-hint {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    /* Input row */
+    .input-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .input-wrapper {
+      flex: 1;
+      position: relative;
+    }
+
+    .phone-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 16px 16px;
+      font-size: 16px;
+      color: var(--text);
+      outline: none;
+      transition: all 0.3s;
+    }
+
+    .phone-input:focus {
+      border-color: var(--neon2);
+      background: rgba(0, 207, 255, 0.05);
+      box-shadow: 0 0 0 4px rgba(0, 207, 255, 0.1);
+    }
+
+    .phone-input.error {
+      border-color: var(--danger);
+      background: rgba(255, 80, 80, 0.05);
+      animation: shake 0.3s;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+
+    .submit-btn {
+      padding: 0 24px;
+      background: linear-gradient(135deg, rgba(0, 207, 255, 0.2), rgba(0, 207, 255, 0.1));
+      border: 1px solid rgba(0, 207, 255, 0.3);
+      border-radius: 20px;
+      color: var(--neon2);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s;
+      white-space: nowrap;
+    }
+
+    .submit-btn:hover:not(:disabled) {
+      background: rgba(0, 207, 255, 0.25);
+      border-color: var(--neon2);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0, 207, 255, 0.2);
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Status area */
+    .status-area {
+      min-height: 44px;
+      margin-top: 16px;
+    }
+
+    .status-message {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      animation: fadeIn 0.3s;
+    }
+
+    .status-message.error { color: var(--danger); }
+    .status-message.success { color: var(--neon); }
+
+    .spinner-small {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(0, 207, 255, 0.2);
+      border-top-color: var(--neon2);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Code display */
+    .code-box {
+      margin-top: 24px;
+      background: rgba(0, 255, 136, 0.05);
+      border: 1px solid rgba(0, 255, 136, 0.2);
+      border-radius: 24px;
+      padding: 24px;
+      text-align: center;
+      animation: fadeUp 0.4s;
+    }
+
+    .code-label {
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .code-value {
+      font-size: clamp(28px, 7vw, 40px);
+      font-weight: 700;
+      letter-spacing: 8px;
+      color: var(--neon);
+      font-family: monospace;
+      margin-bottom: 18px;
+      word-break: break-all;
+    }
+
+    .copy-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 24px;
+      background: rgba(0, 255, 136, 0.1);
+      border: 1px solid rgba(0, 255, 136, 0.2);
+      border-radius: 100px;
+      color: var(--neon);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .copy-btn:hover {
+      background: rgba(0, 255, 136, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .copy-btn.copied {
+      background: rgba(0, 255, 136, 0.3);
+      color: white;
+    }
+
+    /* Back link */
+    .back-link {
+      margin-top: 28px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s;
+      animation: fadeUp 0.6s ease 0.3s both;
+    }
+
+    .back-link:hover {
+      color: var(--text);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      .container { padding: 16px; }
+      .card { padding: 24px 18px; }
+      .input-row { flex-direction: column; }
+      .submit-btn { padding: 16px; justify-content: center; }
+    }
+
+    @media (max-height: 600px) and (orientation: landscape) {
+      .container { padding: 10px; }
+      .logo { width: 60px; height: 60px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.01ms !important; }
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--neon2);
+      outline-offset: 2px;
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,207,255,0.3); border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <canvas id="canvas"></canvas>
+
+  <div class="container">
+    <div class="badge">
+      <i class="fa-solid fa-key"></i>
+      <span>PAIR CODE</span>
+    </div>
+
+    <div class="brand">
+      <img src="https://raw.githubusercontent.com/Official123-12/STANYFREEBOT-/refs/heads/main/IMG_1377.jpeg" class="logo" onerror="this.style.display='none'">
+      <h2 class="title">STANY<span>TZ</span></h2>
+      <div class="subtitle">Enter Phone Number</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <i class="fa-solid fa-phone"></i>
+        <span>Get Pair Code</span>
+      </div>
+      <div class="card-hint">
+        Enter your full phone number with country code<br>
+        <strong>Example:</strong> 255618123456
+      </div>
+
+      <div class="input-row">
+        <div class="input-wrapper">
+          <input type="tel" id="phoneInput" class="phone-input" placeholder="e.g., 255618123456" inputmode="numeric" maxlength="15">
+        </div>
+        <button id="submitBtn" class="submit-btn">
+          <i class="fa-solid fa-bolt"></i>
+          <span>Get</span>
+        </button>
+      </div>
+
+      <div id="statusArea" class="status-area"></div>
+      <div id="codeArea"></div>
+    </div>
+
+    <a href="/" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Home
+    </a>
+  </div>
+
+  <script>
+    // Security
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key)) || (e.ctrlKey && e.key === 'u')) {
+        e.preventDefault();
+      }
+    });
+
+    const phoneInput = document.getElementById('phoneInput');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusArea = document.getElementById('statusArea');
+    const codeArea = document.getElementById('codeArea');
+
+    function setStatus(message, type = '') {
+      if (!message) {
+        statusArea.innerHTML = '';
+        return;
+      }
+      const icons = {
+        loading: '<div class="spinner-small"></div>',
+        error: '<i class="fa-solid fa-circle-exclamation"></i>',
+        success: '<i class="fa-solid fa-circle-check"></i>'
+      };
+      statusArea.innerHTML = `<div class="status-message ${type}">${icons[type] || ''}<span>${message}</span></div>`;
+    }
+
+    function showCode(code) {
+      codeArea.innerHTML = `
+        <div class="code-box">
+          <div class="code-label"><i class="fa-solid fa-key"></i> YOUR PAIR CODE</div>
+          <div class="code-value" id="pairCode">${code}</div>
+          <button class="copy-btn" id="copyBtn"><i class="fa-regular fa-copy"></i> Copy Code</button>
+        </div>
+      `;
+
+      document.getElementById('copyBtn').addEventListener('click', async () => {
+        const codeEl = document.getElementById('pairCode');
+        const code = codeEl.innerText;
+        try {
+          await navigator.clipboard.writeText(code);
+          const btn = document.getElementById('copyBtn');
+          btn.classList.add('copied');
+          btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+          setTimeout(() => {
+            btn.classList.remove('copied');
+            btn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy Code';
+          }, 2000);
+        } catch {
+          // fallback
+          const ta = document.createElement('textarea');
+          ta.value = code;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          alert('Code copied to clipboard!');
+        }
+      });
+    }
+
+    async function getPairCode() {
+      const raw = phoneInput.value.replace(/\D/g, '');
+      codeArea.innerHTML = '';
+      phoneInput.classList.remove('error');
+
+      if (!raw || raw.length < 7) {
+        phoneInput.classList.add('error');
+        setStatus('Please enter a valid phone number (7-15 digits)', 'error');
+        phoneInput.focus();
+        return;
+      }
+
+      submitBtn.disabled = true;
+      setStatus('Requesting pair code...', 'loading');
+
+      try {
+        // Real backend call to /code
+        const response = await fetch(`/code?number=${raw}`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin'
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.message || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const pairCode = data.code || data.pairCode;
+        if (!pairCode) throw new Error(data.message || 'No code in response');
+
+        setStatus('Pair code generated successfully!', 'success');
+        showCode(pairCode);
+      } catch (err) {
+        console.error('Pair error:', err);
+        setStatus(err.message || 'Failed to get pair code', 'error');
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    submitBtn.addEventListener('click', getPairCode);
+    phoneInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') getPairCode();
+    });
+    phoneInput.addEventListener('input', () => {
+      phoneInput.classList.remove('error');
+      setStatus('');
+    });
+
+    // Particles background (same as main)
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, particles = [];
+    let animFrame;
+
+    function initParticles() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+      const count = Math.min(Math.floor(width * height / 15000), 50);
+      particles = [];
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: (Math.random() - 0.5) * 0.3,
+          size: Math.random() * 2 + 1,
+          opacity: Math.random() * 0.3 + 0.1
+        });
+      }
+    }
+
+    function drawParticles() {
+      ctx.clearRect(0, 0, width, height);
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist < 120) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(0, 207, 255, ${0.1 * (1 - dist/120)})`;
+            ctx.stroke();
+          }
+        }
+        particles[i].x += particles[i].vx;
+        particles[i].y += particles[i].vy;
+        if (particles[i].x < 0 || particles[i].x > width) particles[i].vx *= -1;
+        if (particles[i].y < 0 || particles[i].y > height) particles[i].vy *= -1;
+        ctx.beginPath();
+        ctx.arc(particles[i].x, particles[i].y, particles[i].size, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(0, 207, 255, ${particles[i].opacity})`;
+        ctx.fill();
+      }
+      animFrame = requestAnimationFrame(drawParticles);
+    }
+
+    window.addEventListener('resize', () => {
+      clearTimeout(window.resizeTimer);
+      window.resizeTimer = setTimeout(() => {
+        cancelAnimationFrame(animFrame);
+        initParticles();
+        drawParticles();
+      }, 200);
+    });
+
+    initParticles();
+    drawParticles();
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) cancelAnimationFrame(animFrame);
+      else drawParticles();
+    });
+  </script>
+</body>
+</html>
