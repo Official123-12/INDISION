@@ -21,13 +21,13 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <style>
+    /* Copy the entire style from your main.html */
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
     }
-
     :root {
       --bg: #0a0a12;
       --surface: rgba(255, 255, 255, 0.05);
@@ -41,455 +41,21 @@
       --glass: blur(20px) saturate(180%);
       --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     }
-
-    html, body {
-      width: 100%;
-      min-height: 100vh;
-      background: var(--bg);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      color: var(--text);
-      line-height: 1.5;
-      overflow-x: hidden;
-      position: relative;
-    }
-
-    /* Background with overlay */
-    body {
-      background: url('https://raw.githubusercontent.com/Official123-12/STANYFREEBOT-/refs/heads/main/IMG_1377.jpeg') center/cover fixed;
-      background-blend-mode: overlay;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background: radial-gradient(ellipse at top, rgba(10, 10, 18, 0.7), rgba(10, 10, 18, 0.95));
-      z-index: 0;
-    }
-
-    /* Animated background orbs */
-    .orb {
-      position: fixed;
-      border-radius: 50%;
-      filter: blur(80px);
-      pointer-events: none;
-      z-index: 1;
-      opacity: 0.5;
-    }
-
-    .orb-1 {
-      width: 400px;
-      height: 400px;
-      background: radial-gradient(circle, rgba(0, 255, 136, 0.2), transparent 70%);
-      top: -100px;
-      left: -100px;
-      animation: drift 20s ease-in-out infinite alternate;
-    }
-
-    .orb-2 {
-      width: 350px;
-      height: 350px;
-      background: radial-gradient(circle, rgba(0, 207, 255, 0.15), transparent 70%);
-      bottom: -100px;
-      right: -80px;
-      animation: drift 24s ease-in-out infinite alternate-reverse;
-    }
-
-    @keyframes drift {
-      to { transform: translate(50px, 50px); }
-    }
-
-    /* Canvas for particles */
-    #canvas {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 2;
-      pointer-events: none;
-    }
-
-    /* Main container */
-    .container {
-      position: relative;
-      z-index: 10;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-
-    /* Brand section */
-    .brand {
-      text-align: center;
-      margin-bottom: 24px;
-      animation: fadeUp 0.6s ease;
-    }
-
-    .logo {
-      width: 90px;
-      height: 90px;
-      border-radius: 24px;
-      border: 2px solid var(--neon);
-      box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
-      margin-bottom: 16px;
-      animation: pulse 3s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.3); }
-      50% { box-shadow: 0 0 50px rgba(0, 255, 136, 0.6); }
-    }
-
-    .title {
-      font-size: clamp(2.5rem, 8vw, 4rem);
-      font-weight: 800;
-      letter-spacing: -2px;
-      background: linear-gradient(135deg, #fff, rgba(255, 255, 255, 0.7));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .title span {
-      background: linear-gradient(135deg, var(--neon), var(--neon2));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .subtitle {
-      font-size: 12px;
-      color: var(--text-muted);
-      letter-spacing: 4px;
-      text-transform: uppercase;
-      margin-top: 8px;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 20px;
-      background: rgba(0, 255, 136, 0.1);
-      border: 1px solid rgba(0, 255, 136, 0.2);
-      border-radius: 100px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--neon);
-      margin-bottom: 20px;
-      backdrop-filter: blur(10px);
-    }
-
-    /* Cards grid */
-    .grid {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      width: 100%;
-      margin: 20px 0;
-    }
-
-    .grid-3 {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      width: 100%;
-    }
-
-    /* Card styles */
-    .card {
-      position: relative;
-      background: var(--surface);
-      backdrop-filter: var(--glass);
-      -webkit-backdrop-filter: var(--glass);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 24px;
-      text-decoration: none;
-      color: inherit;
-      transition: all 0.3s ease;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .card:hover {
-      transform: translateY(-4px);
-      border-color: rgba(255, 255, 255, 0.15);
-      background: var(--surface-hover);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-    }
-
-    .card:active {
-      transform: translateY(-2px);
-    }
-
-    .card::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--neon), var(--neon2), transparent);
-      transform: scaleX(0);
-      transition: transform 0.4s;
-    }
-
-    .card:hover::after {
-      transform: scaleX(1);
-    }
-
-    .card-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 16px;
-      background: rgba(0, 255, 136, 0.1);
-      border: 1px solid rgba(0, 255, 136, 0.2);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      color: var(--neon);
-      flex-shrink: 0;
-      transition: all 0.3s;
-    }
-
-    .card:hover .card-icon {
-      transform: scale(1.1) rotate(-5deg);
-    }
-
-    .card-content {
-      flex: 1;
-    }
-
-    .card-title {
-      font-size: 18px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-
-    .card-desc {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    .card-arrow {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      color: var(--text-muted);
-      transition: all 0.3s;
-    }
-
-    .card:hover .card-arrow {
-      color: var(--text);
-      transform: translate(4px, -4px);
-    }
-
-    /* Small cards for social */
-    .card-small {
-      padding: 16px;
-      border-radius: 18px;
-      flex-direction: column;
-      text-align: center;
-      gap: 8px;
-    }
-
-    .card-small .card-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      font-size: 20px;
-    }
-
-    .card-small .card-title {
-      font-size: 14px;
-    }
-
-    .card-small .card-desc {
-      font-size: 10px;
-    }
-
-    /* Card variants */
-    .card-qr .card-icon {
-      background: rgba(0, 255, 136, 0.1);
-      border-color: rgba(0, 255, 136, 0.2);
-      color: var(--neon);
-    }
-
-    .card-pair .card-icon {
-      background: rgba(0, 207, 255, 0.1);
-      border-color: rgba(0, 207, 255, 0.2);
-      color: var(--neon2);
-    }
-
-    .card-settings .card-icon {
-      background: rgba(162, 89, 255, 0.1);
-      border-color: rgba(162, 89, 255, 0.2);
-      color: var(--accent);
-    }
-
-    .card-wa .card-icon {
-      background: rgba(37, 211, 102, 0.1);
-      border-color: rgba(37, 211, 102, 0.2);
-      color: #25d366;
-    }
-
-    .card-group .card-icon {
-      background: rgba(0, 172, 237, 0.1);
-      border-color: rgba(0, 172, 237, 0.2);
-      color: #00acee;
-    }
-
-    .card-gh .card-icon {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.2);
-      color: #fff;
-    }
-
-    /* Footer */
-    .footer {
-      margin-top: 30px;
-      text-align: center;
-      font-size: 11px;
-      color: var(--text-muted);
-      animation: fadeUp 0.6s ease 0.3s both;
-    }
-
-    .developer {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      margin-bottom: 8px;
-      font-size: 13px;
-    }
-
-    .developer a {
-      color: var(--neon2);
-      text-decoration: none;
-      font-weight: 600;
-    }
-
-    .developer a:hover {
-      color: var(--neon);
-    }
-
-    /* Animations */
-    @keyframes fadeUp {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    /* Responsive */
-    @media (max-width: 480px) {
-      .container {
-        padding: 16px;
-      }
-
-      .card {
-        padding: 18px;
-      }
-
-      .card-icon {
-        width: 42px;
-        height: 42px;
-        font-size: 20px;
-      }
-
-      .card-title {
-        font-size: 16px;
-      }
-
-      .grid-3 {
-        gap: 8px;
-      }
-
-      .card-small {
-        padding: 12px;
-      }
-    }
-
-    /* Landscape mode */
-    @media (max-height: 600px) and (orientation: landscape) {
-      .container {
-        padding: 10px;
-      }
-
-      .logo {
-        width: 60px;
-        height: 60px;
-      }
-
-      .title {
-        font-size: 2rem;
-      }
-
-      .grid {
-        margin: 10px 0;
-      }
-    }
-
-    /* Accessibility */
-    @media (prefers-reduced-motion: reduce) {
-      * {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-      }
-    }
-
-    :focus-visible {
-      outline: 2px solid var(--neon2);
-      outline-offset: 2px;
-      border-radius: 8px;
-    }
-
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: rgba(0, 207, 255, 0.3);
-      border-radius: 3px;
-    }
+    /* ... rest of the CSS ... */
   </style>
 </head>
 <body>
-  <!-- Background orbs -->
+  <!-- Background orbs, canvas, etc. -->
   <div class="orb orb-1"></div>
   <div class="orb orb-2"></div>
-  
-  <!-- Particles canvas -->
   <canvas id="canvas"></canvas>
 
   <div class="container">
-    <!-- Badge -->
     <div class="badge">
       <i class="fa-solid fa-bolt"></i>
-      <span>Session Generator</span>
+      <span>Stany Free Bot</span>
     </div>
 
-    <!-- Brand -->
     <div class="brand">
       <img src="https://raw.githubusercontent.com/Official123-12/STANYFREEBOT-/refs/heads/main/IMG_1377.jpeg" 
            alt="STANY TZ" 
@@ -499,112 +65,62 @@
       <div class="subtitle">Premium Pairing Platform</div>
     </div>
 
-    <!-- Main cards -->
     <div class="grid">
       <a href="/qrpage" class="card card-qr">
-        <div class="card-icon">
-          <i class="fa-solid fa-qrcode"></i>
-        </div>
+        <div class="card-icon"><i class="fa-solid fa-qrcode"></i></div>
         <div class="card-content">
           <div class="card-title">QR Code</div>
           <div class="card-desc">Scan to link your device</div>
         </div>
-        <span class="card-arrow">
-          <i class="fa-solid fa-arrow-right"></i>
-        </span>
+        <span class="card-arrow"><i class="fa-solid fa-arrow-right"></i></span>
       </a>
 
       <a href="/pair" class="card card-pair">
-        <div class="card-icon">
-          <i class="fa-solid fa-key"></i>
-        </div>
+        <div class="card-icon"><i class="fa-solid fa-key"></i></div>
         <div class="card-content">
           <div class="card-title">Pair Code</div>
           <div class="card-desc">Link via phone number</div>
         </div>
-        <span class="card-arrow">
-          <i class="fa-solid fa-arrow-right"></i>
-        </span>
+        <span class="card-arrow"><i class="fa-solid fa-arrow-right"></i></span>
       </a>
 
-      <!-- Settings Card -->
       <a href="/settings.html" class="card card-settings">
-        <div class="card-icon">
-          <i class="fa-solid fa-sliders"></i>
-        </div>
+        <div class="card-icon"><i class="fa-solid fa-sliders"></i></div>
         <div class="card-content">
           <div class="card-title">Bot Settings</div>
           <div class="card-desc">Configure your bot</div>
         </div>
-        <span class="card-arrow">
-          <i class="fa-solid fa-arrow-right"></i>
-        </span>
+        <span class="card-arrow"><i class="fa-solid fa-arrow-right"></i></span>
       </a>
     </div>
 
-    <!-- Social cards -->
     <div class="grid-3">
-      <a href="https://github.com/Stanytz378/IAMLEGEND/fork" 
-         target="_blank" 
-         rel="noopener noreferrer" 
-         class="card card-small card-gh">
-        <div class="card-icon">
-          <i class="fa-brands fa-github"></i>
-        </div>
-        <div>
-          <div class="card-title">GitHub</div>
-          <div class="card-desc">Source</div>
-        </div>
+      <a href="https://github.com/Stanytz378/IAMLEGEND/fork" target="_blank" class="card card-small card-gh">
+        <div class="card-icon"><i class="fa-brands fa-github"></i></div>
+        <div><div class="card-title">GitHub</div><div class="card-desc">Source</div></div>
       </a>
-
-      <a href="https://whatsapp.com/channel/0029Vb7fzu4EwEjmsD4Tzs1p" 
-         target="_blank" 
-         rel="noopener noreferrer" 
-         class="card card-small card-wa">
-        <div class="card-icon">
-          <i class="fa-brands fa-whatsapp"></i>
-        </div>
-        <div>
-          <div class="card-title">Channel</div>
-          <div class="card-desc">Updates</div>
-        </div>
+      <a href="https://whatsapp.com/channel/0029Vb7fzu4EwEjmsD4Tzs1p" target="_blank" class="card card-small card-wa">
+        <div class="card-icon"><i class="fa-brands fa-whatsapp"></i></div>
+        <div><div class="card-title">Channel</div><div class="card-desc">Updates</div></div>
       </a>
-
-      <a href="https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y" 
-         target="_blank" 
-         rel="noopener noreferrer" 
-         class="card card-small card-group">
-        <div class="card-icon">
-          <i class="fa-solid fa-users"></i>
-        </div>
-        <div>
-          <div class="card-title">Group</div>
-          <div class="card-desc">Support</div>
-        </div>
+      <a href="https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y" target="_blank" class="card card-small card-group">
+        <div class="card-icon"><i class="fa-solid fa-users"></i></div>
+        <div><div class="card-title">Group</div><div class="card-desc">Support</div></div>
       </a>
     </div>
 
-    <!-- Footer -->
     <div class="footer">
       <div class="developer">
         <i class="fa-solid fa-code"></i>
-        Developed by 
-        <a href="tel:+255787069580">+255 787 069 580</a>
+        Developed by <a href="tel:+255787069580">+255 787 069 580</a>
       </div>
-      <div>
-        &copy; <span id="year"></span> STANY PAIRING WEBSITE
-      </div>
+      <div>&copy; <span id="year"></span> STANY PAIRING WEBSITE</div>
     </div>
   </div>
 
   <script>
-    // Set current year
     document.getElementById('year').textContent = new Date().getFullYear();
-
-    // Disable right click (optional)
-    document.addEventListener('contextmenu', e => e.preventDefault());
-
-    // Particles animation
+    // Particles animation (copy from your main.html)
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     let width, height, particles = [];
@@ -633,68 +149,19 @@
 
     function drawParticles() {
       ctx.clearRect(0, 0, width, height);
-
-      // Draw connections
-      ctx.strokeStyle = 'rgba(0, 207, 255, 0.1)';
-      ctx.lineWidth = 0.5;
-
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x;
-          const dy = particles[i].y - particles[j].y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance < 120) {
-            ctx.beginPath();
-            ctx.moveTo(particles[i].x, particles[i].y);
-            ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.strokeStyle = `rgba(0, 207, 255, ${0.1 * (1 - distance / 120)})`;
-            ctx.stroke();
-          }
-        }
-      }
-
-      // Draw particles
-      particles.forEach(p => {
-        // Update position
-        p.x += p.vx;
-        p.y += p.vy;
-
-        // Bounce off edges
-        if (p.x < 0 || p.x > width) p.vx *= -1;
-        if (p.y < 0 || p.y > height) p.vy *= -1;
-
-        // Draw
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(0, 207, 255, ${p.opacity})`;
-        ctx.fill();
-      });
-
+      // ... drawing logic ...
       animationFrame = requestAnimationFrame(drawParticles);
     }
 
-    // Handle resize
-    let resizeTimeout;
     window.addEventListener('resize', () => {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
+      clearTimeout(window.resizeTimeout);
+      window.resizeTimeout = setTimeout(() => {
         initParticles();
       }, 200);
     });
 
-    // Start animation
     initParticles();
     drawParticles();
-
-    // Pause animation when tab is hidden
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        cancelAnimationFrame(animationFrame);
-      } else {
-        drawParticles();
-      }
-    });
   </script>
 </body>
 </html>
