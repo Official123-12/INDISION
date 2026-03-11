@@ -7,13 +7,13 @@ const fs = require('fs-extra');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
 
-// ==================== MODELS ====================
+// ==================== MODELS (centralized) ====================
 const { Session, Pending, BotSettings } = require('./database/models');
 
 // ==================== HANDLER ====================
 const handler = require('./handler');
 
-// ==================== FANCY FUNCTION ====================
+// ✅ **FANCY FUNCTION**
 function fancy(text) {
     if (!text || typeof text !== 'string') return text;
     const map = {
@@ -46,7 +46,7 @@ const dbPromise = mongoose.connect(MONGODB_URI, {
     process.exit(1);
 });
 
-// ✅ **MIDDLEWARE to check DB connection**
+// ✅ **MIDDLEWARE to check DB connection before any request**
 app.use((req, res, next) => {
     if (mongoose.connection.readyState !== 1) {
         return res.status(503).json({ 
@@ -58,13 +58,14 @@ app.use((req, res, next) => {
 });
 
 // ✅ **ACTIVE SOCKETS MAP**
-const activeSockets = new Map();
+const activeSockets = new Map(); // key: number (sanitized) -> socket
 const socketCreationTime = new Map();
 
 // ✅ **MIDDLEWARE**
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'))); // Serve frontend files
 
+// ✅ **CREATE PUBLIC FOLDER IF NOT EXISTS**
 fs.ensureDirSync(path.join(__dirname, 'public'));
 
 // ✅ **LOAD CONFIG**
@@ -84,7 +85,8 @@ try {
     };
 }
 
-// ==================== SESSION MANAGEMENT ====================
+// ==================== SESSION MANAGEMENT FUNCTIONS ====================
+
 async function saveSessionToDB(number, sessionData) {
     try {
         await Session.findOneAndUpdate(
@@ -117,14 +119,17 @@ async function deleteSessionFromDB(number) {
     }
 }
 
+// ✅ **GENERATE UNIQUE SECRET**
 function generateSecret() {
     return 'INS' + crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
-// ==================== BOT START FUNCTION ====================
+// ==================== BOT START FUNCTION (PER NUMBER) – supports both pair and QR ====================
+
 async function startBot(number, res = null, method = 'pair') {
     const sanitizedNumber = number.replace(/[^0-9]/g, '');
 
+    // If already connected, disconnect and delete old session
     if (activeSockets.has(sanitizedNumber)) {
         console.log(fancy(`⚠️ ${sanitizedNumber} already connected, disconnecting old session...`));
         const oldSocket = activeSockets.get(sanitizedNumber);
@@ -139,6 +144,7 @@ async function startBot(number, res = null, method = 'pair') {
         await fs.remove(sessionDir);
     }
 
+    // Prevent multiple connection attempts
     const lockKey = `connecting_${sanitizedNumber}`;
     if (global[lockKey]) {
         console.log(fancy(`⏳ ${sanitizedNumber} connection in progress`));
@@ -153,6 +159,7 @@ async function startBot(number, res = null, method = 'pair') {
         const sessionDir = path.join(__dirname, 'sessions', sanitizedNumber);
         await fs.ensureDir(sessionDir);
 
+        // Load existing session from DB (if any) – but we already deleted above, so none should exist
         const existingSession = await loadSessionFromDB(sanitizedNumber);
         if (existingSession && !fs.existsSync(path.join(sessionDir, 'creds.json'))) {
             await fs.writeFile(
@@ -183,21 +190,24 @@ async function startBot(number, res = null, method = 'pair') {
         activeSockets.set(sanitizedNumber, conn);
         socketCreationTime.set(sanitizedNumber, Date.now());
 
+        // Generate a secret for this pending pairing
         const secret = generateSecret();
         await Pending.create({ number: sanitizedNumber, secret });
 
         if (method === 'pair') {
+            // Pairing code flow
             setTimeout(async () => {
                 try {
                     await new Promise(resolve => setTimeout(resolve, 2000));
                     const code = await conn.requestPairingCode(sanitizedNumber);
                     console.log(fancy(`🔑 Pairing Code for ${sanitizedNumber}: ${code}`));
+
                     if (res && !res.headersSent) {
                         return res.json({
                             success: true,
                             code: code,
                             secret: secret,
-                            message: `8-digit pairing code: ${code}`
+                            message: `8-digit pairing code: ${code}\nYour secret ID: ${secret}`
                         });
                     }
                 } catch (error) {
@@ -211,6 +221,7 @@ async function startBot(number, res = null, method = 'pair') {
                 }
             }, 3000);
         } else {
+            // QR code flow – wait for 'qr' event
             let qrSent = false;
             const qrTimeout = setTimeout(() => {
                 if (!qrSent && res && !res.headersSent) {
@@ -244,6 +255,7 @@ async function startBot(number, res = null, method = 'pair') {
             });
         }
 
+        // ==================== SESSION UPDATE HANDLER ====================
         conn.ev.on('creds.update', async () => {
             await saveCreds();
             try {
@@ -255,10 +267,14 @@ async function startBot(number, res = null, method = 'pair') {
             }
         });
 
+        // ==================== CONNECTION UPDATE HANDLER ====================
         conn.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect } = update;
+
             if (connection === 'open') {
                 console.log(fancy(`✅ ${sanitizedNumber} connected!`));
+
+                // When connected, associate the pending secret with this number in BotSettings
                 const pending = await Pending.findOne({ number: sanitizedNumber });
                 if (pending) {
                     await BotSettings.findOneAndUpdate(
@@ -269,6 +285,8 @@ async function startBot(number, res = null, method = 'pair') {
                     await pending.deleteOne();
                     console.log(fancy(`🔗 Linked secret ${pending.secret} to number ${sanitizedNumber}`));
                 }
+
+                // Send welcome message to owner if this number is in owner list
                 if (config.ownerNumber && config.ownerNumber.includes(sanitizedNumber)) {
                     try {
                         const userJid = jidNormalizedUser(conn.user.id);
@@ -302,16 +320,20 @@ async function startBot(number, res = null, method = 'pair') {
                     }
                 }
             }
+
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
                 console.log(fancy(`❌ ${sanitizedNumber} disconnected: ${statusCode}`));
+
                 activeSockets.delete(sanitizedNumber);
                 socketCreationTime.delete(sanitizedNumber);
+
                 if (statusCode === DisconnectReason.loggedOut) {
                     console.log(fancy(`🔓 ${sanitizedNumber} logged out, deleting session`));
                     await deleteSessionFromDB(sanitizedNumber);
                     await fs.remove(sessionDir);
                 } else {
+                    // Try to reconnect after delay
                     console.log(fancy(`🔄 Reconnecting ${sanitizedNumber} in 10 seconds...`));
                     setTimeout(() => {
                         startBot(sanitizedNumber, null, method);
@@ -320,6 +342,7 @@ async function startBot(number, res = null, method = 'pair') {
             }
         });
 
+        // ==================== MESSAGE HANDLER – PASSTHROUGH TO MAIN HANDLER ====================
         conn.ev.on('messages.upsert', async (m) => {
             try {
                 if (handler && typeof handler === 'function') {
@@ -330,6 +353,7 @@ async function startBot(number, res = null, method = 'pair') {
             }
         });
 
+        // ==================== GROUP UPDATE HANDLER ====================
         conn.ev.on('group-participants.update', async (update) => {
             try {
                 if (handler && handler.handleGroupUpdate) {
@@ -340,6 +364,7 @@ async function startBot(number, res = null, method = 'pair') {
             }
         });
 
+        // ==================== CALL HANDLER ====================
         conn.ev.on('call', async (call) => {
             try {
                 if (handler && handler.handleCall) {
@@ -360,7 +385,7 @@ async function startBot(number, res = null, method = 'pair') {
     }
 }
 
-// ==================== AUTO-RECONNECT ====================
+// ==================== AUTO-RECONNECT ON STARTUP ====================
 async function autoReconnectAll() {
     try {
         const sessions = await Session.find({});
@@ -368,7 +393,7 @@ async function autoReconnectAll() {
         for (const session of sessions) {
             if (!activeSockets.has(session.number)) {
                 console.log(fancy(`Reconnecting ${session.number}...`));
-                startBot(session.number, null, 'pair');
+                startBot(session.number, null, 'pair'); // Default to pair (safe)
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
@@ -378,6 +403,8 @@ async function autoReconnectAll() {
 }
 
 // ==================== HTTP ENDPOINTS ====================
+
+// ✅ **PAIRING ENDPOINT (8-DIGIT CODE)**
 app.get('/code', async (req, res) => {
     try {
         let num = req.query.number;
@@ -397,6 +424,7 @@ app.get('/code', async (req, res) => {
     }
 });
 
+// ✅ **QR ENDPOINT**
 app.get('/qr', async (req, res) => {
     try {
         let num = req.query.number;
@@ -416,6 +444,7 @@ app.get('/qr', async (req, res) => {
     }
 });
 
+// ✅ **UNPAIR ENDPOINT**
 app.get('/unpair', async (req, res) => {
     try {
         let num = req.query.num;
@@ -426,6 +455,7 @@ app.get('/unpair', async (req, res) => {
         if (cleanNum.length < 10) {
             return res.json({ success: false, error: "Invalid number" });
         }
+
         const socket = activeSockets.get(cleanNum);
         if (socket) {
             await socket.ws.close();
@@ -433,8 +463,10 @@ app.get('/unpair', async (req, res) => {
             activeSockets.delete(cleanNum);
             socketCreationTime.delete(cleanNum);
         }
+
         await deleteSessionFromDB(cleanNum);
         await fs.remove(path.join(__dirname, 'sessions', cleanNum));
+
         res.json({ success: true, message: `Number ${cleanNum} unpaired successfully` });
     } catch (err) {
         console.error(fancy("Unpair error:"), err.message);
@@ -442,6 +474,7 @@ app.get('/unpair', async (req, res) => {
     }
 });
 
+// ✅ **LIST ALL CONNECTED NUMBERS**
 app.get('/connections', (req, res) => {
     const connections = [];
     for (const [num, sock] of activeSockets.entries()) {
@@ -450,14 +483,20 @@ app.get('/connections', (req, res) => {
             uptime: Math.floor((Date.now() - (socketCreationTime.get(num) || Date.now())) / 1000)
         });
     }
-    res.json({ success: true, total: activeSockets.size, connections });
+    res.json({
+        success: true,
+        total: activeSockets.size,
+        connections
+    });
 });
 
+// ✅ **HEALTH CHECK**
 app.get('/health', (req, res) => {
     const uptime = process.uptime();
     const hours = Math.floor(uptime / 3600);
     const minutes = Math.floor((uptime % 3600) / 60);
     const seconds = Math.floor(uptime % 60);
+
     res.json({
         status: 'healthy',
         activeSessions: activeSockets.size,
@@ -466,6 +505,7 @@ app.get('/health', (req, res) => {
     });
 });
 
+// ✅ **BOT INFO ENDPOINT**
 app.get('/botinfo', (req, res) => {
     const firstSocket = activeSockets.values().next().value;
     if (!firstSocket || !firstSocket.user) {
@@ -475,6 +515,7 @@ app.get('/botinfo', (req, res) => {
             activeSessions: activeSockets.size
         });
     }
+
     res.json({
         success: true,
         botName: firstSocket.user?.name || "INSIDIOUS",
@@ -485,26 +526,36 @@ app.get('/botinfo', (req, res) => {
     });
 });
 
-// Auth endpoints (for settings)
+// ✅ **AUTH ENDPOINT – login with secret**
 app.post('/api/auth', async (req, res) => {
     const { secret } = req.body;
-    if (!secret) return res.status(400).json({ success: false, error: 'Secret required' });
+    if (!secret) {
+        return res.status(400).json({ success: false, error: 'Secret required' });
+    }
     try {
         const settings = await BotSettings.findOne({ secret });
-        if (settings) res.json({ success: true, user: settings.number });
-        else res.status(401).json({ success: false, error: 'Invalid secret' });
+        if (settings) {
+            res.json({ success: true, user: settings.number });
+        } else {
+            res.status(401).json({ success: false, error: 'Invalid secret' });
+        }
     } catch (err) {
         console.error(fancy('Auth error:'), err);
         res.status(500).json({ success: false, error: 'Server error' });
     }
 });
 
+// ✅ **GET SETTINGS – using secret**
 app.get('/api/settings', async (req, res) => {
     const { secret } = req.query;
-    if (!secret) return res.status(400).json({ success: false, error: 'Secret required' });
+    if (!secret) {
+        return res.status(400).json({ success: false, error: 'Secret required' });
+    }
     try {
         const settings = await BotSettings.findOne({ secret });
-        if (!settings) return res.status(404).json({ success: false, error: 'Settings not found' });
+        if (!settings) {
+            return res.status(404).json({ success: false, error: 'Settings not found' });
+        }
         res.json({ success: true, settings: settings.settings });
     } catch (err) {
         console.error(fancy('Get settings error:'), err);
@@ -512,17 +563,24 @@ app.get('/api/settings', async (req, res) => {
     }
 });
 
+// ✅ **UPDATE SETTINGS**
 app.post('/api/settings', async (req, res) => {
     const { secret, settings } = req.body;
-    if (!secret) return res.status(400).json({ success: false, error: 'Secret required' });
-    if (!settings || typeof settings !== 'object') return res.status(400).json({ success: false, error: 'Settings must be an object' });
+    if (!secret) {
+        return res.status(400).json({ success: false, error: 'Secret required' });
+    }
+    if (!settings || typeof settings !== 'object') {
+        return res.status(400).json({ success: false, error: 'Settings must be an object' });
+    }
     try {
         const result = await BotSettings.findOneAndUpdate(
             { secret },
             { settings, updatedAt: Date.now() },
             { new: true }
         );
-        if (!result) return res.status(404).json({ success: false, error: 'Secret not found' });
+        if (!result) {
+            return res.status(404).json({ success: false, error: 'Secret not found' });
+        }
         res.json({ success: true, message: 'Settings updated' });
     } catch (err) {
         console.error(fancy('Update settings error:'), err);
@@ -530,10 +588,18 @@ app.post('/api/settings', async (req, res) => {
     }
 });
 
-// Static routes
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'main.html')));
-app.get('/pair', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pair.html')));
-app.get('/qrpage', (req, res) => res.sendFile(path.join(__dirname, 'public', 'qr.html')));
+// ==================== SIMPLE ROUTES – serve frontend files ====================
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'main.html'));
+});
 
-// ==================== EXPORT ====================
+app.get('/pair', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'pair.html'));
+});
+
+app.get('/qrpage', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'qr.html'));
+});
+
+// ==================== EXPORT APP AND DBPROMISE ====================
 module.exports = { app, dbPromise };
