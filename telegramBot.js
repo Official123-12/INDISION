@@ -11,6 +11,9 @@ if (!token) {
     process.exit(1);
 }
 
+// Backend URL – set this to where your pairing backend runs
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000'; // change if needed
+
 // Only channel required (no group)
 const CHANNEL_USERNAME = '@stanytech12';
 
@@ -102,8 +105,8 @@ async function handleDeploy(chatId, phone) {
     const procMsg = await bot.sendMessage(chatId, '⏳ *Generating pairing code...*');
 
     try {
-        const baseUrl = process.env.APP_URL || `http://localhost:${config.port || 3000}`;
-        const response = await axios.get(`${baseUrl}/code?number=${phone}`, { timeout: 30000 });
+        // Call the backend pairing endpoint
+        const response = await axios.get(`${BACKEND_URL}/code?number=${phone}`, { timeout: 30000 });
         const data = response.data;
 
         if (!data.success || !data.code) {
@@ -446,7 +449,6 @@ _🥀 Trust the shadows, not the pilot._
         for (let i = 1; i <= count; i++) {
             const odds = (Math.random() * (4.5 - 1.2) + 1.2).toFixed(2);
             const confidence = Math.floor(Math.random() * (99 - 75) + 75);
-            // Generate cashout suggestion (between 1.2 and odds)
             const cashout = (Math.random() * (parseFloat(odds) - 1.2) + 1.2).toFixed(2);
             const phrase = phrases[Math.floor(Math.random() * phrases.length)];
 
@@ -458,7 +460,6 @@ _🥀 Trust the shadows, not the pilot._
                 `💡 *Analysis:* ${phrase}\n\n` +
                 `_This signal will auto‑delete in 5 minutes._`;
 
-            // Send signal with the aviator image
             const sentMsg = await bot.sendPhoto(chatId, AVIATOR_IMAGE, {
                 caption: signalText,
                 parse_mode: 'Markdown'
@@ -484,7 +485,6 @@ _🥀 Trust the shadows, not the pilot._
         const chatId = msg.chat.id;
         if (!await isMember(chatId)) return handlers.start(msg);
 
-        // Generate 5x5 grid with 3 mines and 4 safe spots
         const size = 5;
         const totalCells = size * size;
         let grid = Array(totalCells).fill('⬛');
@@ -566,6 +566,11 @@ function setupBot() {
     if (botInitialized) return;
     botInitialized = true;
 
+    // Delete any existing webhook to prevent polling conflicts
+    axios.get(`https://api.telegram.org/bot${token}/deleteWebhook`)
+        .then(() => console.log('✅ Webhook cleared'))
+        .catch(err => console.warn('⚠️ Could not delete webhook:', err.message));
+
     bot = new TelegramBot(token, { polling: true });
     global.bot = bot;
 
@@ -573,12 +578,10 @@ function setupBot() {
     bot.on('polling_error', (error) => {
         console.error('Telegram polling error:', error.message);
         if (error.message.includes('409') || error.message.includes('EFATAL')) {
-            console.log('🔄 Restarting bot in 5 seconds...');
-            bot.stopPolling().then(() => {
-                setTimeout(() => {
-                    bot.startPolling().catch(e => console.error('Restart failed:', e));
-                }, 5000);
-            }).catch(e => console.error('Stop polling error:', e));
+            console.log('🛑 Conflict detected – stopping bot and exiting...');
+            bot.stopPolling()
+                .then(() => process.exit(1))
+                .catch(() => process.exit(1));
         }
     });
 
