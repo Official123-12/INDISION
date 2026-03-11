@@ -27,7 +27,6 @@ const telegramTokenSchema = new mongoose.Schema({
 });
 const TelegramToken = mongoose.models.TelegramToken || mongoose.model('TelegramToken', telegramTokenSchema);
 
-// Schema for user's paired WhatsApp numbers (from deployments)
 const userNumberSchema = new mongoose.Schema({
     chatId: { type: String, required: true, index: true },
     phone: { type: String, required: true },
@@ -52,6 +51,7 @@ function scheduleDelete(chatId, messageId, seconds = 60) {
 }
 
 let bot; // will be created after DB ready
+let botInitialized = false;
 
 // ==================== Helper: check channel membership ====================
 async function isMember(chatId) {
@@ -84,27 +84,25 @@ async function sendWithImage(chatId, text, extraButtons = []) {
     });
 }
 
-// ==================== Helper: send plain text with buttons ====================
-async function sendWithButtons(chatId, text, extraButtons = []) {
-    const inlineKeyboard = {
-        inline_keyboard: [
-            ...extraButtons.map(btn => [btn]),
-            [{ text: '🏠 Main Menu', callback_data: 'menu' }]
-        ]
-    };
-    return bot.sendMessage(chatId, text, {
-        parse_mode: 'Markdown',
-        reply_markup: inlineKeyboard
-    });
-}
-
-// ==================== Bot Setup ====================
+// ==================== Bot Setup (called once) ====================
 function setupBot() {
-    bot = new TelegramBot(token, { polling: true });
+    if (botInitialized) return;
+    botInitialized = true;
 
-    // Prevent crash on polling errors
+    bot = new TelegramBot(token, { polling: true });
+    global.bot = bot; // make globally accessible for graceful shutdown
+
+    // Prevent crash on polling errors & handle 409 conflict
     bot.on('polling_error', (error) => {
         console.error('Telegram polling error:', error.message);
+        if (error.message.includes('409')) {
+            console.log('🔄 Conflict detected, restarting bot in 5 seconds...');
+            bot.stopPolling().then(() => {
+                setTimeout(() => {
+                    bot.startPolling().catch(e => console.error('Restart failed:', e));
+                }, 5000);
+            }).catch(e => console.error('Stop polling error:', e));
+        }
     });
 
     // Handle text messages (for pending deploy)
@@ -124,7 +122,7 @@ function setupBot() {
         }
     });
 
-    // /start
+    // /start – checks membership, then offers deploy button
     bot.onText(/\/start/, async (msg) => {
         const chatId = msg.chat.id;
         const firstName = msg.from.first_name || 'User';
@@ -147,7 +145,7 @@ function setupBot() {
         await sendWithImage(chatId, text, [{ text: '🚀 Deploy Bot', callback_data: 'deploy' }]);
     });
 
-    // /menu
+    // /menu – lists all commands
     bot.onText(/\/menu/, async (msg) => {
         const chatId = msg.chat.id;
         if (!await isMember(chatId)) return bot.emit('text', { ...msg, text: '/start' });
