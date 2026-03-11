@@ -1,8 +1,6 @@
 const mongoose = require('mongoose');
 
-const groupSettingSchema = new mongoose.Schema({
-    // per‑group overrides – can be added dynamically
-}, { strict: false });
+const groupSettingSchema = new mongoose.Schema({}, { strict: false });
 
 const botSettingsSchema = new mongoose.Schema({
     botNumber: { type: String, unique: true, required: true },
@@ -10,4 +8,6 @@ const botSettingsSchema = new mongoose.Schema({
     groupSettings: { type: Map, of: groupSettingSchema, default: {} }
 }, { timestamps: true });
 
-module.exports = mongoose.model('BotSettings', botSettingsSchema);
+const BotSettings = mongoose.models.BotSettings || mongoose.model('BotSettings', botSettingsSchema);
+
+module.exports = BotSettings;
