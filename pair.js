@@ -13,7 +13,6 @@ import {
     DisconnectReason
 } from '@whiskeysockets/baileys';
 import { Session } from './database/models.js';
-import handler from './handler.js';
 import config from './config.js';
 
 const router = express.Router();
@@ -21,7 +20,7 @@ const MAX_RECONNECT_ATTEMPTS = 3;
 const SESSION_TIMEOUT = 5 * 60 * 1000;
 const CLEANUP_DELAY = 5000;
 
-// Welcome message – same as in your handler
+// Welcome message – same as in handler
 const WELCOME_MESSAGE = `
 ╭─── • 🥀 • ───╮
    INSIDIOUS: THE LAST KEY
@@ -181,18 +180,14 @@ router.get('/', async (req, res) => {
 
                         // Send welcome message to user
                         const userJid = jidNormalizedUser(num + '@s.whatsapp.net');
-                        const imageUrl = config.botImage || 'https://files.catbox.moe/f3c07u.jpg';
                         const { prepareWAMessageMedia } = await import('@whiskeysockets/baileys');
-                        const imageMedia = await prepareWAMessageMedia({ image: { url: imageUrl } }, { upload: sock.waUploadToServer });
+                        const imageMedia = await prepareWAMessageMedia({ image: { url: config.botImage } }, { upload: sock.waUploadToServer });
                         await sock.sendMessage(userJid, {
                             image: imageMedia.imageMessage,
                             caption: WELCOME_MESSAGE
                         });
 
-                        // Initialize handler
-                        if (handler && handler.init) {
-                            await handler.init(sock);
-                        }
+                        console.log(`🎉 Bot for ${num} paired successfully and session saved.`);
                     } catch (err) {
                         console.error('Error sending welcome or saving session:', err);
                     } finally {
@@ -283,7 +278,7 @@ router.get('/', async (req, res) => {
     await initiateSession();
 });
 
-// Cleanup old session folders periodically
+// Cleanup old session folders (from pairing process)
 setInterval(async () => {
     try {
         const baseDir = './auth_info_baileys';
@@ -297,7 +292,7 @@ setInterval(async () => {
             try {
                 const stats = await fs.stat(sessionPath);
                 if (now - stats.mtimeMs > 10 * 60 * 1000) {
-                    console.log(`🗑️ Removing old session: ${session}`);
+                    console.log(`🗑️ Removing old pairing session: ${session}`);
                     await fs.remove(sessionPath);
                 }
             } catch (e) {}
