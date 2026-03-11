@@ -1,9 +1,10 @@
-const config = require('../../config');
 module.exports = {
     name: "self",
-    execute: async (conn, msg, args, { from, fancy, isOwner }) => {
+    description: "Switch bot to self (private) mode – only owner can command",
+    category: "owner",
+    execute: async (conn, msg, args, { from, fancy, isOwner, reply, setBotSetting }) => {
         if (!isOwner) return;
-        config.workMode = "private";
-        conn.sendMessage(from, { text: fancy("🥀 ʙᴏᴛ ɪꜱ ɴᴏᴡ ɪɴ ᴘʀɪᴠᴀᴛᴇ ᴍᴏᴅᴇ. ᴏɴʟʏ ᴛʜᴇ ᴏᴡɴᴇʀ ᴄᴀɴ ᴄᴏᴍᴍᴀɴᴅ ᴍᴇ.") });
+        await setBotSetting('mode', 'self');
+        reply(fancy("🥀 ʙᴏᴛ ɪꜱ ɴᴏᴡ ɪɴ ꜱᴇʟꜰ ᴍᴏᴅᴇ. ᴏɴʟʏ ᴛʜᴇ ᴏᴡɴᴇʀ ᴄᴀɴ ᴄᴏᴍᴍᴀɴᴅ ᴍᴇ."));
     }
 };
