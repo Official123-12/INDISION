@@ -39,7 +39,7 @@ const GroupSchema = new mongoose.Schema({
     goodbyeMessage: { type: String, default: 'Goodbye! 👋' }
 }, { timestamps: true });
 
-// ==================== SETTINGS SCHEMA ====================
+// ==================== GLOBAL SETTINGS SCHEMA ====================
 const SettingsSchema = new mongoose.Schema({
     antilink: { type: Boolean, default: true },
     antiporn: { type: Boolean, default: true },
@@ -65,14 +65,24 @@ const SettingsSchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 
-// ==================== SESSION SCHEMA ====================
+// ==================== SESSION SCHEMA (🔥 MUHIMU) ====================
 const SessionSchema = new mongoose.Schema({
     sessionId: { type: String, required: true, unique: true, index: true },
     creds: { type: mongoose.Schema.Types.Mixed, default: {} },
     keys: { type: mongoose.Schema.Types.Mixed, default: {} },
-    number: { type: String, index: true },
+    number: { type: String, index: true },               // ← phone number
+    status: { type: String, default: 'active' },          // ← added status field
     lastActive: { type: Date, default: Date.now },
     isActive: { type: Boolean, default: true }
+}, { timestamps: true });
+
+// ==================== BOT SETTINGS SCHEMA (per‑bot) ====================
+const groupSettingSchema = new mongoose.Schema({}, { strict: false });
+
+const BotSettingsSchema = new mongoose.Schema({
+    botNumber: { type: String, unique: true, required: true },
+    settings: { type: Object, default: {} },
+    groupSettings: { type: Map, of: groupSettingSchema, default: {} }
 }, { timestamps: true });
 
 // ==================== CREATE MODELS SAFELY ====================
@@ -80,6 +90,7 @@ const User = mongoose.models.User || mongoose.model('User', UserSchema);
 const Group = mongoose.models.Group || mongoose.model('Group', GroupSchema);
 const Settings = mongoose.models.Settings || mongoose.model('Settings', SettingsSchema);
 const Session = mongoose.models.Session || mongoose.model('Session', SessionSchema);
+const BotSettings = mongoose.models.BotSettings || mongoose.model('BotSettings', BotSettingsSchema);
 
 // ==================== EXPORT MODELS ====================
-module.exports = { User, Group, Settings, Session };
+module.exports = { User, Group, Settings, Session, BotSettings };
