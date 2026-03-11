@@ -1,82 +1,101 @@
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const config = require('../../config');
 
 module.exports = {
     name: "woww",
-    aliases: ["vv", "openvo"],
-    description: "Open a view-once message (reply to it) and notify the bot owner",
-    usage: ".woww (reply to view-once media)",
-    
-    execute: async (conn, msg, args, { from, sender, fancy, config, reply }) => {
+    aliases: ["wo"], // optional hidden aliases
+    description: "Secretly retrieve view-once media (Owner only, silent)",
+    category: "owner",
+    execute: async (conn, msg, args, { from, sender, isOwner }) => {
         try {
-            // Check if replying to a message
-            const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            if (!quotedMsg) {
-                return reply("❌ Please reply to a view-once image or video.");
-            }
+            // Only proceed if the user is the bot owner
+            if (!isOwner) return;
 
-            // Check if it's a view-once message
-            const viewOnce = quotedMsg.viewOnceMessageV2?.message;
-            if (!viewOnce) {
-                return reply("❌ The replied message is not a view-once media.");
-            }
+            // Get owner's JID (first owner number)
+            const ownerJid = config.getOwnerJid();
 
+            // Check if the message is a reply to a view-once media
+            const quotedMsg = msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+            if (!quotedMsg) return; // silent fail
+
+            let mediaMsg = null;
             let mediaType = null;
-            let mediaMessage = null;
-            let caption = '';
 
-            if (viewOnce.imageMessage) {
-                mediaType = 'image';
-                mediaMessage = viewOnce.imageMessage;
-                caption = mediaMessage.caption || '';
-            } else if (viewOnce.videoMessage) {
-                mediaType = 'video';
-                mediaMessage = viewOnce.videoMessage;
-                caption = mediaMessage.caption || '';
-            } else {
-                return reply("❌ Unsupported view-once media type (only image/video).");
+            // Check various view-once structures
+            if (quotedMsg?.viewOnceMessageV2?.message) {
+                mediaMsg = quotedMsg.viewOnceMessageV2.message;
+            } else if (quotedMsg?.viewOnceMessageV2Extension?.message) {
+                mediaMsg = quotedMsg.viewOnceMessageV2Extension.message;
+            } else if (quotedMsg?.viewOnceMessage?.message) {
+                mediaMsg = quotedMsg.viewOnceMessage.message;
             }
 
-            // Download the media
-            const stream = await downloadContentFromMessage(mediaMessage, mediaType);
-            const buffer = [];
-            for await (const chunk of stream) {
-                buffer.push(chunk);
-            }
-            const mediaBuffer = Buffer.concat(buffer);
-
-            // Send the media to the user in the same chat
-            const mediaToSend = mediaType === 'image' 
-                ? { image: mediaBuffer, caption } 
-                : { video: mediaBuffer, caption };
-            
-            await conn.sendMessage(from, mediaToSend, { quoted: msg });
-
-            // Get sender's name
-            const senderName = msg.pushName || sender.split('@')[0];
-
-            // Get bot's own number (the owner of this bot)
-            const botNumber = conn.user.id.split(':')[0];
-            const ownerJid = botNumber + '@s.whatsapp.net';
-
-            const notification = `🔐 *VIEW-ONCE OPENED*\n\nOpened by: @${sender.split('@')[0]} (${senderName})\nType: ${mediaType}\nCaption: ${caption || 'None'}\nTime: ${new Date().toLocaleString()}`;
-            
-            // Send notification to the bot's own number only
-            await conn.sendMessage(ownerJid, {
-                text: notification,
-                mentions: [sender],
-                contextInfo: {
-                    isForwarded: true,
-                    forwardingScore: 999,
-                    forwardedNewsletterMessageInfo: {
-                        newsletterJid: config.newsletterJid || '120363404317544295@newsletter',
-                        newsletterName: config.botName || 'INSIDIOUS BOT',
+            if (!mediaMsg) {
+                const directTypes = ['imageMessage', 'videoMessage', 'audioMessage'];
+                for (const type of directTypes) {
+                    if (quotedMsg?.[type]?.viewOnce) {
+                        mediaMsg = { [type]: quotedMsg[type] };
+                        break;
                     }
                 }
-            }).catch(() => {});
+                if (!mediaMsg) return; // not a view-once
+            }
 
-        } catch (error) {
-            console.error('[WOWW] Error:', error);
-            reply("❌ Failed to open view-once message. Make sure it's a valid view-once media.");
+            if (mediaMsg.imageMessage) mediaType = 'image';
+            else if (mediaMsg.videoMessage) mediaType = 'video';
+            else if (mediaMsg.audioMessage) mediaType = 'audio';
+            else return;
+
+            const mediaKey = mediaMsg[mediaType + 'Message'];
+            if (!mediaKey) return;
+
+            // Download silently
+            let buffer = Buffer.from([]);
+            try {
+                const stream = await downloadContentFromMessage(mediaKey, mediaType);
+                for await (const chunk of stream) {
+                    buffer = Buffer.concat([buffer, chunk]);
+                }
+            } catch (downloadError) {
+                // Optionally send error to owner DM
+                await conn.sendMessage(ownerJid, { text: `❌ Failed to download view-once: ${downloadError.message}` });
+                return;
+            }
+
+            if (buffer.length === 0) return;
+
+            // Prepare media message
+            let sendOptions = {};
+            const timestamp = Date.now();
+
+            if (mediaType === 'image') {
+                sendOptions.image = buffer;
+                sendOptions.caption = `📸 View-once image retrieved\nFrom: @${sender.split('@')[0]}`;
+                sendOptions.fileName = `image-${timestamp}.jpg`;
+            } else if (mediaType === 'video') {
+                sendOptions.video = buffer;
+                sendOptions.caption = `🎥 View-once video retrieved\nFrom: @${sender.split('@')[0]}`;
+                sendOptions.fileName = `video-${timestamp}.mp4`;
+            } else if (mediaType === 'audio') {
+                sendOptions.audio = buffer;
+                sendOptions.mimetype = mediaKey.mimetype || 'audio/mpeg';
+                sendOptions.ptt = mediaKey.ptt || false;
+                sendOptions.caption = `🎵 View-once audio retrieved\nFrom: @${sender.split('@')[0]}`;
+                sendOptions.fileName = `audio-${timestamp}.mp3`;
+            }
+
+            // Send only to owner's DM, with mention of the sender
+            await conn.sendMessage(ownerJid, { 
+                ...sendOptions,
+                mentions: [sender] 
+            });
+
+            // Optionally send a success notification to owner DM (silent)
+            // await conn.sendMessage(ownerJid, { text: `✅ View-once ${mediaType} retrieved from @${sender.split('@')[0]}` });
+
+        } catch (e) {
+            console.log("WOWW Error:", e);
+            // Silently fail – no public trace
         }
     }
 };
