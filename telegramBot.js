@@ -58,7 +58,8 @@ async function isMember(chatId) {
     try {
         const chatMember = await bot.getChatMember(YOUR_CHANNEL_USERNAME, chatId);
         return ['member', 'administrator', 'creator'].includes(chatMember.status);
-    } catch {
+    } catch (err) {
+        console.error('⚠️ Channel membership check failed:', err.message);
         return false;
     }
 }
@@ -84,46 +85,9 @@ async function sendWithImage(chatId, text, extraButtons = []) {
     });
 }
 
-// ==================== Bot Setup (called once) ====================
-function setupBot() {
-    if (botInitialized) return;
-    botInitialized = true;
-
-    bot = new TelegramBot(token, { polling: true });
-    global.bot = bot; // make globally accessible for graceful shutdown
-
-    // Prevent crash on polling errors & handle 409 conflict
-    bot.on('polling_error', (error) => {
-        console.error('Telegram polling error:', error.message);
-        if (error.message.includes('409')) {
-            console.log('🔄 Conflict detected, restarting bot in 5 seconds...');
-            bot.stopPolling().then(() => {
-                setTimeout(() => {
-                    bot.startPolling().catch(e => console.error('Restart failed:', e));
-                }, 5000);
-            }).catch(e => console.error('Stop polling error:', e));
-        }
-    });
-
-    // Handle text messages (for pending deploy)
-    bot.on('text', async (msg) => {
-        const chatId = msg.chat.id;
-        const text = msg.text.trim();
-
-        // If waiting for phone number
-        if (pendingDeploy.has(chatId)) {
-            pendingDeploy.delete(chatId);
-            const phone = text.replace(/[^0-9]/g, '');
-            if (phone.length < 9) {
-                return sendWithImage(chatId, '❌ *Invalid phone number.* Please try /deploy again.');
-            }
-            // Process deploy with phone
-            await handleDeploy(chatId, phone);
-        }
-    });
-
-    // /start – checks membership, then offers deploy button
-    bot.onText(/\/start/, async (msg) => {
+// ==================== Command Handlers (to be called from both text and callbacks) ====================
+const handlers = {
+    async start(msg) {
         const chatId = msg.chat.id;
         const firstName = msg.from.first_name || 'User';
 
@@ -143,12 +107,11 @@ function setupBot() {
 
         const text = `╭─── • 🥀 • ───╮\n   ɪɴꜱɪᴅɪᴏᴜꜱ ʙᴏᴛ\n╰─── • 🥀 • ───╯\n\n👋 Welcome, ${firstName}!\n\nClick the button below to deploy your WhatsApp bot.`;
         await sendWithImage(chatId, text, [{ text: '🚀 Deploy Bot', callback_data: 'deploy' }]);
-    });
+    },
 
-    // /menu – lists all commands
-    bot.onText(/\/menu/, async (msg) => {
+    async menu(msg) {
         const chatId = msg.chat.id;
-        if (!await isMember(chatId)) return bot.emit('text', { ...msg, text: '/start' });
+        if (!await isMember(chatId)) return handlers.start(msg);
 
         const text = `╭─── • 📋 • ───╮\n   *ᴍᴀɪɴ ᴍᴇɴᴜ*\n╰─── • 📋 • ───╯\n\n` +
             `• /info – Bot information\n` +
@@ -167,12 +130,11 @@ function setupBot() {
             { text: '📊 Stats', callback_data: 'stats' },
             { text: '🗑️ Unpair', callback_data: 'unpair' }
         ]);
-    });
+    },
 
-    // /info
-    bot.onText(/\/info/, async (msg) => {
+    async info(msg) {
         const chatId = msg.chat.id;
-        if (!await isMember(chatId)) return bot.emit('text', { ...msg, text: '/start' });
+        if (!await isMember(chatId)) return handlers.start(msg);
 
         const text = `╭─── • ℹ️ • ───╮\n   *ʙᴏᴛ ɪɴꜰᴏ*\n╰─── • ℹ️ • ───╯\n\n` +
             `🤖 *Name:* ${config.botName}\n` +
@@ -184,12 +146,11 @@ function setupBot() {
             `⭐ *GitHub:* [Click](${config.githubUrl})\n` +
             `📢 *Channel:* [Join](${WHATSAPP_CHANNEL_LINK})`;
         await sendWithImage(chatId, text, [{ text: '🚀 Deploy', callback_data: 'deploy' }]);
-    });
+    },
 
-    // /stats
-    bot.onText(/\/stats/, async (msg) => {
+    async stats(msg) {
         const chatId = msg.chat.id;
-        if (!await isMember(chatId)) return bot.emit('text', { ...msg, text: '/start' });
+        if (!await isMember(chatId)) return handlers.start(msg);
 
         try {
             const totalUsers = (await TelegramToken.distinct('chatId')).length;
@@ -206,36 +167,32 @@ function setupBot() {
             console.error('Stats error:', e);
             await sendWithImage(chatId, '❌ *Error retrieving statistics.*', [{ text: '🚀 Deploy', callback_data: 'deploy' }]);
         }
-    });
+    },
 
-    // /channel
-    bot.onText(/\/channel/, async (msg) => {
+    async channel(msg) {
         const chatId = msg.chat.id;
-        if (!await isMember(chatId)) return bot.emit('text', { ...msg, text: '/start' });
+        if (!await isMember(chatId)) return handlers.start(msg);
         const text = `╭─── • 📢 • ───╮\n   *ᴡʜᴀᴛꜱᴀᴘᴘ ᴄʜᴀɴɴᴇʟ*\n╰─── • 📢 • ───╯\n\n[Join here](${WHATSAPP_CHANNEL_LINK})`;
         await sendWithImage(chatId, text, [{ text: '🚀 Deploy', callback_data: 'deploy' }]);
-    });
+    },
 
-    // /group
-    bot.onText(/\/group/, async (msg) => {
+    async group(msg) {
         const chatId = msg.chat.id;
-        if (!await isMember(chatId)) return bot.emit('text', { ...msg, text: '/start' });
+        if (!await isMember(chatId)) return handlers.start(msg);
         const text = `╭─── • 👥 • ───╮\n   *ꜱᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ*\n╰─── • 👥 • ───╯\n\n[Join here](${WHATSAPP_GROUP_LINK})`;
         await sendWithImage(chatId, text, [{ text: '🚀 Deploy', callback_data: 'deploy' }]);
-    });
+    },
 
-    // /website
-    bot.onText(/\/website/, async (msg) => {
+    async website(msg) {
         const chatId = msg.chat.id;
-        if (!await isMember(chatId)) return bot.emit('text', { ...msg, text: '/start' });
+        if (!await isMember(chatId)) return handlers.start(msg);
         const text = `╭─── • 🌐 • ───╮\n   *ᴏᴜʀ ᴡᴇʙꜱɪᴛᴇ*\n╰─── • 🌐 • ───╯\n\n${WEBSITE_LINK}`;
         await sendWithImage(chatId, text, [{ text: '🚀 Deploy', callback_data: 'deploy' }]);
-    });
+    },
 
-    // /fb – Facebook download
-    bot.onText(/\/fb (.+)/, async (msg, match) => {
+    async fb(msg, match) {
         const chatId = msg.chat.id;
-        if (!await isMember(chatId)) return bot.emit('text', { ...msg, text: '/start' });
+        if (!await isMember(chatId)) return handlers.start(msg);
         const url = match[1].trim();
         if (!url.startsWith('http')) {
             return sendWithImage(chatId, '❌ *Please provide a valid URL.*', [{ text: '🚀 Deploy', callback_data: 'deploy' }]);
@@ -257,12 +214,11 @@ function setupBot() {
             await bot.deleteMessage(chatId, processingMsg.message_id);
             await sendWithImage(chatId, '❌ *Failed to download video.*', [{ text: '🚀 Deploy', callback_data: 'deploy' }]);
         }
-    });
+    },
 
-    // /tiktok – TikTok download
-    bot.onText(/\/tiktok (.+)/, async (msg, match) => {
+    async tiktok(msg, match) {
         const chatId = msg.chat.id;
-        if (!await isMember(chatId)) return bot.emit('text', { ...msg, text: '/start' });
+        if (!await isMember(chatId)) return handlers.start(msg);
         const url = match[1].trim();
         if (!url.startsWith('http')) {
             return sendWithImage(chatId, '❌ *Please provide a valid URL.*', [{ text: '🚀 Deploy', callback_data: 'deploy' }]);
@@ -284,14 +240,13 @@ function setupBot() {
             await bot.deleteMessage(chatId, processingMsg.message_id);
             await sendWithImage(chatId, '❌ *Failed to download video.*', [{ text: '🚀 Deploy', callback_data: 'deploy' }]);
         }
-    });
+    },
 
-    // /deploy command (with optional phone)
-    bot.onText(/\/deploy(?: (.+))?/, async (msg, match) => {
+    async deploy(msg, match) {
         const chatId = msg.chat.id;
-        if (!await isMember(chatId)) return bot.emit('text', { ...msg, text: '/start' });
+        if (!await isMember(chatId)) return handlers.start(msg);
 
-        const phone = match[1] ? match[1].replace(/[^0-9]/g, '') : null;
+        const phone = match && match[1] ? match[1].replace(/[^0-9]/g, '') : null;
 
         if (!phone || phone.length < 9) {
             // Ask for phone number
@@ -306,12 +261,11 @@ function setupBot() {
         }
 
         await handleDeploy(chatId, phone);
-    });
+    },
 
-    // /unpair command – show list of paired numbers and allow deletion
-    bot.onText(/\/unpair/, async (msg) => {
+    async unpair(msg) {
         const chatId = msg.chat.id;
-        if (!await isMember(chatId)) return bot.emit('text', { ...msg, text: '/start' });
+        if (!await isMember(chatId)) return handlers.start(msg);
 
         const numbers = await UserNumber.find({ chatId: chatId.toString() }).sort({ pairedAt: -1 });
         if (numbers.length === 0) {
@@ -325,136 +279,201 @@ function setupBot() {
             buttons.push([{ text: `🗑️ Delete +${n.phone}`, callback_data: `unpair_${n._id}` }]);
         }
         await sendWithImage(chatId, text, buttons);
+    }
+};
+
+// ==================== DEPLOY LOGIC ====================
+async function handleDeploy(chatId, phone) {
+    // Generate a temporary token and store it
+    const tempToken = crypto.randomBytes(8).toString('hex');
+    const expires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    await TelegramToken.create({
+        chatId: chatId.toString(),
+        token: tempToken,
+        expires,
+        used: false,
+        phone
     });
 
-    // ==================== DEPLOY LOGIC ====================
-    async function handleDeploy(chatId, phone) {
-        // Generate a temporary token and store it
-        const tempToken = crypto.randomBytes(8).toString('hex');
-        const expires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    const procMsg = await bot.sendMessage(chatId, '⏳ *Generating pairing code and QR...*');
 
-        await TelegramToken.create({
+    try {
+        const baseUrl = process.env.APP_URL || `http://localhost:${config.port || 3000}`;
+        const response = await axios.get(`${baseUrl}/code?number=${phone}`, { timeout: 30000 });
+        const data = response.data;
+
+        if (!data.success || !data.code) {
+            throw new Error(data.error || 'Pairing failed');
+        }
+
+        const pairCode = data.code;
+        const secret = data.secret || 'N/A';
+
+        // Save to user's paired numbers
+        await UserNumber.create({
             chatId: chatId.toString(),
-            token: tempToken,
-            expires,
-            used: false,
-            phone
+            phone,
+            secret,
+            pairedAt: new Date()
         });
 
-        const procMsg = await bot.sendMessage(chatId, '⏳ *Generating pairing code and QR...*');
-
+        // Generate QR code from the pairing code
+        let qrImageBuffer = null;
         try {
-            const baseUrl = process.env.APP_URL || `http://localhost:${config.port || 3000}`;
-            const response = await axios.get(`${baseUrl}/code?number=${phone}`, { timeout: 30000 });
-            const data = response.data;
-
-            if (!data.success || !data.code) {
-                throw new Error(data.error || 'Pairing failed');
-            }
-
-            const pairCode = data.code;
-            const secret = data.secret || 'N/A';
-
-            // Save to user's paired numbers
-            await UserNumber.create({
-                chatId: chatId.toString(),
-                phone,
-                secret,
-                pairedAt: new Date()
-            });
-
-            // Generate QR code from the pairing code
-            let qrImageBuffer = null;
-            try {
-                const qrDataUrl = await QRCode.toDataURL(pairCode);
-                const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '');
-                qrImageBuffer = Buffer.from(base64Data, 'base64');
-            } catch (qrErr) {
-                console.warn('QR generation failed, sending only text:', qrErr.message);
-            }
-
-            await bot.deleteMessage(chatId, procMsg.message_id);
-
-            const caption = 
-                `╭─── • 🔑 • ───╮\n   *ᴘᴀɪʀɪɴɢ ꜱᴜᴄᴄᴇꜱꜱ*\n╰─── • 🔑 • ───╯\n\n` +
-                `📱 *Number:* +${phone}\n` +
-                `🔢 *Code:* \`${pairCode}\`\n` +
-                `🔐 *Secret:* \`${secret}\`\n\n` +
-                `*Instructions:*\n` +
-                `1. Open WhatsApp on your phone\n` +
-                `2. Go to *Linked Devices* → *Link a Device*\n` +
-                `3. Enter the code above\n\n` +
-                `_The QR code below contains the same code (scan to copy)._\n\n` +
-                `_This message will auto‑delete in 60 seconds._`;
-
-            if (qrImageBuffer) {
-                const sent = await bot.sendPhoto(chatId, qrImageBuffer, {
-                    caption,
-                    parse_mode: 'Markdown',
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{ text: '📋 Copy Code', callback_data: `copy_${pairCode}` }],
-                            [{ text: '🏠 Main Menu', callback_data: 'menu' }]
-                        ]
-                    }
-                });
-                scheduleDelete(chatId, sent.message_id, 60);
-            } else {
-                const sent = await bot.sendMessage(chatId, caption, {
-                    parse_mode: 'Markdown',
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{ text: '📋 Copy Code', callback_data: `copy_${pairCode}` }],
-                            [{ text: '🏠 Main Menu', callback_data: 'menu' }]
-                        ]
-                    }
-                });
-                scheduleDelete(chatId, sent.message_id, 60);
-            }
-
-            await TelegramToken.findOneAndUpdate({ token: tempToken }, { used: true });
-
-        } catch (err) {
-            console.error('Deploy error:', err.message);
-            await bot.deleteMessage(chatId, procMsg.message_id);
-            await sendWithImage(chatId, '❌ *Failed to generate pairing code. Please try again later.*', [{ text: '🚀 Deploy', callback_data: 'deploy' }]);
+            const qrDataUrl = await QRCode.toDataURL(pairCode);
+            const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '');
+            qrImageBuffer = Buffer.from(base64Data, 'base64');
+        } catch (qrErr) {
+            console.warn('QR generation failed, sending only text:', qrErr.message);
         }
+
+        await bot.deleteMessage(chatId, procMsg.message_id);
+
+        const caption = 
+            `╭─── • 🔑 • ───╮\n   *ᴘᴀɪʀɪɴɢ ꜱᴜᴄᴄᴇꜱꜱ*\n╰─── • 🔑 • ───╯\n\n` +
+            `📱 *Number:* +${phone}\n` +
+            `🔢 *Code:* \`${pairCode}\`\n` +
+            `🔐 *Secret:* \`${secret}\`\n\n` +
+            `*Instructions:*\n` +
+            `1. Open WhatsApp on your phone\n` +
+            `2. Go to *Linked Devices* → *Link a Device*\n` +
+            `3. Enter the code above\n\n` +
+            `_The QR code below contains the same code (scan to copy)._\n\n` +
+            `_This message will auto‑delete in 60 seconds._`;
+
+        if (qrImageBuffer) {
+            const sent = await bot.sendPhoto(chatId, qrImageBuffer, {
+                caption,
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '📋 Copy Code', callback_data: `copy_${pairCode}` }],
+                        [{ text: '🏠 Main Menu', callback_data: 'menu' }]
+                    ]
+                }
+            });
+            scheduleDelete(chatId, sent.message_id, 60);
+        } else {
+            const sent = await bot.sendMessage(chatId, caption, {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '📋 Copy Code', callback_data: `copy_${pairCode}` }],
+                        [{ text: '🏠 Main Menu', callback_data: 'menu' }]
+                    ]
+                }
+            });
+            scheduleDelete(chatId, sent.message_id, 60);
+        }
+
+        await TelegramToken.findOneAndUpdate({ token: tempToken }, { used: true });
+
+    } catch (err) {
+        console.error('Deploy error:', err.message);
+        await bot.deleteMessage(chatId, procMsg.message_id);
+        await sendWithImage(chatId, '❌ *Failed to generate pairing code. Please try again later.*', [{ text: '🚀 Deploy', callback_data: 'deploy' }]);
     }
+}
+
+// ==================== Bot Setup ====================
+function setupBot() {
+    if (botInitialized) return;
+    botInitialized = true;
+
+    bot = new TelegramBot(token, { polling: true });
+    global.bot = bot; // make globally accessible for graceful shutdown
+
+    // Prevent crash on polling errors & handle 409 conflict
+    bot.on('polling_error', (error) => {
+        console.error('Telegram polling error:', error.message);
+        if (error.message.includes('409')) {
+            console.log('🔄 Conflict detected, restarting bot in 5 seconds...');
+            bot.stopPolling().then(() => {
+                setTimeout(() => {
+                    bot.startPolling().catch(e => console.error('Restart failed:', e));
+                }, 5000);
+            }).catch(e => console.error('Stop polling error:', e));
+        }
+    });
+
+    // Handle text messages (including commands and pending deploy)
+    bot.on('text', async (msg) => {
+        const chatId = msg.chat.id;
+        const text = msg.text.trim();
+
+        // If waiting for phone number
+        if (pendingDeploy.has(chatId)) {
+            pendingDeploy.delete(chatId);
+            const phone = text.replace(/[^0-9]/g, '');
+            if (phone.length < 9) {
+                return sendWithImage(chatId, '❌ *Invalid phone number.* Please try /deploy again.');
+            }
+            // Process deploy with phone
+            await handleDeploy(chatId, phone);
+            return;
+        }
+
+        // Handle commands
+        if (text.startsWith('/')) {
+            const [cmd, ...args] = text.slice(1).split(' ');
+            const fullText = text;
+            const match = [null, args.join(' ')]; // simulate regex match
+
+            switch (cmd.toLowerCase()) {
+                case 'start': await handlers.start(msg); break;
+                case 'menu':
+                case 'help': await handlers.menu(msg); break;
+                case 'info': await handlers.info(msg); break;
+                case 'stats': await handlers.stats(msg); break;
+                case 'channel': await handlers.channel(msg); break;
+                case 'group': await handlers.group(msg); break;
+                case 'website': await handlers.website(msg); break;
+                case 'fb': await handlers.fb(msg, match); break;
+                case 'tiktok': await handlers.tiktok(msg, match); break;
+                case 'deploy': await handlers.deploy(msg, match); break;
+                case 'unpair': await handlers.unpair(msg); break;
+                default:
+                    // Unknown command – show menu
+                    await handlers.menu(msg);
+            }
+        } else {
+            // Non‑command message – ignore (or could show menu)
+        }
+    });
 
     // ==================== CALLBACK QUERIES ====================
     bot.on('callback_query', async (callbackQuery) => {
         const msg = callbackQuery.message;
         const chatId = msg.chat.id;
         const data = callbackQuery.data;
+        const userId = callbackQuery.from.id;
+
+        // Acknowledge the callback
+        await bot.answerCallbackQuery(callbackQuery.id);
 
         if (data === 'menu') {
-            await bot.answerCallbackQuery(callbackQuery.id);
-            bot.emit('text', { ...msg, text: '/menu' });
+            await handlers.menu(msg);
         } else if (data === 'deploy') {
-            await bot.answerCallbackQuery(callbackQuery.id);
-            bot.emit('text', { ...msg, text: '/deploy' });
+            await handlers.deploy(msg, [null, '']); // simulate no phone
         } else if (data === 'info') {
-            await bot.answerCallbackQuery(callbackQuery.id);
-            bot.emit('text', { ...msg, text: '/info' });
+            await handlers.info(msg);
         } else if (data === 'stats') {
-            await bot.answerCallbackQuery(callbackQuery.id);
-            bot.emit('text', { ...msg, text: '/stats' });
+            await handlers.stats(msg);
         } else if (data === 'unpair') {
-            await bot.answerCallbackQuery(callbackQuery.id);
-            bot.emit('text', { ...msg, text: '/unpair' });
+            await handlers.unpair(msg);
         } else if (data.startsWith('unpair_')) {
             const id = data.replace('unpair_', '');
             const num = await UserNumber.findByIdAndDelete(id);
             if (num) {
-                await bot.answerCallbackQuery(callbackQuery.id, { text: `Number +${num.phone} deleted.` });
+                await bot.sendMessage(chatId, `✅ Number +${num.phone} deleted.`);
                 // Refresh unpair list
-                bot.emit('text', { ...msg, text: '/unpair' });
+                await handlers.unpair(msg);
             } else {
-                await bot.answerCallbackQuery(callbackQuery.id, { text: 'Number not found.' });
+                await bot.sendMessage(chatId, '❌ Number not found.');
             }
         } else if (data.startsWith('copy_')) {
             const code = data.replace('copy_', '');
-            await bot.answerCallbackQuery(callbackQuery.id);
             await bot.sendMessage(chatId, `🔑 *Pairing Code:* \`${code}\`\n\nTap the code to copy.`, { parse_mode: 'Markdown' });
         }
     });
