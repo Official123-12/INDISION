@@ -65,7 +65,7 @@ const SettingsSchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 
-// ==================== SESSION SCHEMA (🔥 MUHIMU) ====================
+// ==================== SESSION SCHEMA ====================
 const SessionSchema = new mongoose.Schema({
     sessionId: { type: String, required: true, unique: true, index: true },
     creds: { type: mongoose.Schema.Types.Mixed, default: {} },
@@ -75,11 +75,11 @@ const SessionSchema = new mongoose.Schema({
     isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 
-// ==================== CREATE MODELS ====================
-const User = mongoose.model('User', UserSchema);
-const Group = mongoose.model('Group', GroupSchema);
-const Settings = mongoose.model('Settings', SettingsSchema);
-const Session = mongoose.model('Session', SessionSchema);
+// ==================== CREATE MODELS SAFELY ====================
+const User = mongoose.models.User || mongoose.model('User', UserSchema);
+const Group = mongoose.models.Group || mongoose.model('Group', GroupSchema);
+const Settings = mongoose.models.Settings || mongoose.model('Settings', SettingsSchema);
+const Session = mongoose.models.Session || mongoose.model('Session', SessionSchema);
 
 // ==================== EXPORT MODELS ====================
 module.exports = { User, Group, Settings, Session };
