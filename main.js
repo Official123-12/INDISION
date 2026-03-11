@@ -1,13 +1,14 @@
-require('dotenv').config();               // Load .env variables
-const app = require('./index');           // Import the Express app
+require('dotenv').config();
+const { app, dbPromise } = require('./index');
 const PORT = process.env.PORT || 3000;
 
-// Start Express server (only if not started already)
-if (require.main === module) {
+// Wait for MongoDB before starting the server
+dbPromise.then(() => {
     app.listen(PORT, '0.0.0.0', () => {
-        console.log(`✅ Server started from main.js on port ${PORT}`);
+        console.log(`✅ Server listening on port ${PORT}`);
     });
-}
-
-// Start Telegram bot
-require('./telegramBot');
+    require('./telegramBot'); // Start Telegram bot after DB is ready
+}).catch(err => {
+    console.error('Failed to connect to DB, exiting.', err);
+    process.exit(1);
+});
