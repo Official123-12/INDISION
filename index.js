@@ -30,20 +30,20 @@ function fancy(text) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ **MONGODB CONNECTION (MUST SUCCEED)**
+// ✅ **MONGODB CONNECTION – EXPORT PROMISE SO MAIN.JS CAN WAIT**
 console.log(fancy("🔗 Connecting to MongoDB..."));
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://sila_md:sila0022@sila.67mxtd7.mongodb.net/insidious?retryWrites=true&w=majority";
 
-mongoose.connect(MONGODB_URI, {
+const dbPromise = mongoose.connect(MONGODB_URI, {
     serverSelectionTimeoutMS: 30000,
     socketTimeoutMS: 45000,
     maxPoolSize: 10
-})
-.then(() => console.log(fancy("✅ MongoDB Connected")))
-.catch((err) => {
+}).then(() => {
+    console.log(fancy("✅ MongoDB Connected"));
+}).catch((err) => {
     console.log(fancy("❌ MongoDB Connection FAILED"));
     console.log(fancy("💡 Error: " + err.message));
-    process.exit(1); // Exit if database fails – required
+    process.exit(1); // Exit if database fails – it's required
 });
 
 // ✅ **ACTIVE SOCKETS MAP**
@@ -590,38 +590,5 @@ app.get('/qrpage', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'qr.html'));
 });
 
-// ==================== START SERVER ====================
-if (require.main === module) {
-    app.listen(PORT, () => {
-        console.log(fancy(`🌐 Web Interface: http://localhost:${PORT}`));
-        console.log(fancy(`🔗 Pairing: http://localhost:${PORT}/code?number=255XXXXXXXXX`));
-        console.log(fancy(`📱 QR: http://localhost:${PORT}/qr?number=255XXXXXXXXX`));
-        console.log(fancy(`🗑️  Unpair: http://localhost:${PORT}/unpair?num=255XXXXXXXXX`));
-        console.log(fancy(`📊 Connections: http://localhost:${PORT}/connections`));
-        console.log(fancy(`❤️ Health: http://localhost:${PORT}/health`));
-        console.log(fancy(`🔐 Auth API: POST /api/auth`));
-        console.log(fancy(`⚙️ Settings API: GET/POST /api/settings`));
-        console.log(fancy("👑 Developer: STANYTZ"));
-        console.log(fancy("📅 Version: 2.1.1 | Year: 2025"));
-        console.log(fancy("🙏 Special Thanks: REDTECH"));
-
-        setTimeout(autoReconnectAll, 5000);
-    });
-}
-
-// ==================== CLEANUP ON EXIT ====================
-process.on('SIGINT', async () => {
-    console.log(fancy('\n🛑 Shutting down...'));
-    for (const [number, sock] of activeSockets.entries()) {
-        try {
-            await sock.ws.close();
-            console.log(fancy(`Closed connection for ${number}`));
-        } catch (error) {
-            console.error(fancy(`Error closing ${number}:`), error.message);
-        }
-    }
-    await mongoose.connection.close();
-    process.exit(0);
-});
-
-module.exports = app;
+// ==================== EXPORT APP AND DBPROMISE ====================
+module.exports = { app, dbPromise };
