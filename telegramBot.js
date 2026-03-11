@@ -11,10 +11,8 @@ if (!token) {
     process.exit(1);
 }
 
-// Channels & Groups (user must join both)
+// Only channel required (no group)
 const CHANNEL_USERNAME = '@stanytech12';
-const GROUP_INVITE_LINK = 'https://t.me/+reZWM5tVmDUxYTdk';
-let GROUP_ID = null; // will be resolved at startup
 
 // Links
 const WHATSAPP_CHANNEL_LINK = config.whatsappChannel || config.channelUrl || 'https://whatsapp.com/channel/0029Vb7fzu4EwEjmsD4Tzs1p';
@@ -43,9 +41,6 @@ const UserNumber = mongoose.models.UserNumber || mongoose.model('UserNumber', us
 
 // Auto‑delete map
 const autoDeleteMessages = new Map();
-// Pending deploy state (waiting for phone number) – we'll handle it inline
-let bot; // will be created after DB ready
-let botInitialized = false;
 
 function scheduleDelete(chatId, messageId, seconds = 60) {
     const timeout = setTimeout(async () => {
@@ -57,29 +52,16 @@ function scheduleDelete(chatId, messageId, seconds = 60) {
     autoDeleteMessages.set(messageId, { timeout, chatId });
 }
 
-// ==================== Helper: check channel & group membership ====================
+let bot;
+let botInitialized = false;
+
+// ==================== Helper: check channel membership only ====================
 async function isMember(chatId) {
     try {
-        // Channel
-        const channelMember = await bot.getChatMember(CHANNEL_USERNAME, chatId);
-        const isChannelMember = ['member', 'administrator', 'creator'].includes(channelMember.status);
-        
-        // Group (if we have its ID)
-        let isGroupMember = false;
-        if (GROUP_ID) {
-            try {
-                const groupMember = await bot.getChatMember(GROUP_ID, chatId);
-                isGroupMember = ['member', 'administrator', 'creator'].includes(groupMember.status);
-            } catch {
-                isGroupMember = false;
-            }
-        } else {
-            // If group ID not resolved, skip group check (still require channel)
-            isGroupMember = true;
-        }
-        return isChannelMember && isGroupMember;
+        const chatMember = await bot.getChatMember(CHANNEL_USERNAME, chatId);
+        return ['member', 'administrator', 'creator'].includes(chatMember.status);
     } catch (err) {
-        console.error('⚠️ Membership check error:', err.message);
+        console.error('⚠️ Channel membership check error:', err.message);
         return false;
     }
 }
@@ -97,7 +79,6 @@ async function sendWithImage(chatId, text, extraButtons = []) {
         parse_mode: 'Markdown',
         reply_markup: inlineKeyboard
     }).catch(() => {
-        // fallback to text if photo fails
         return bot.sendMessage(chatId, text, {
             parse_mode: 'Markdown',
             reply_markup: inlineKeyboard
@@ -105,24 +86,10 @@ async function sendWithImage(chatId, text, extraButtons = []) {
     });
 }
 
-// ==================== Helper: send plain text with buttons ====================
-async function sendWithButtons(chatId, text, extraButtons = []) {
-    const inlineKeyboard = {
-        inline_keyboard: [
-            ...extraButtons.map(btn => [btn]),
-            [{ text: '🏠 Main Menu', callback_data: 'menu' }]
-        ]
-    };
-    return bot.sendMessage(chatId, text, {
-        parse_mode: 'Markdown',
-        reply_markup: inlineKeyboard
-    });
-}
-
 // ==================== DEPLOY LOGIC ====================
 async function handleDeploy(chatId, phone) {
     const tempToken = crypto.randomBytes(8).toString('hex');
-    const expires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    const expires = new Date(Date.now() + 5 * 60 * 1000);
 
     await TelegramToken.create({
         chatId: chatId.toString(),
@@ -146,7 +113,6 @@ async function handleDeploy(chatId, phone) {
         const pairCode = data.code;
         const secret = data.secret || 'N/A';
 
-        // Save to user's paired numbers
         await UserNumber.create({
             chatId: chatId.toString(),
             phone,
@@ -154,7 +120,6 @@ async function handleDeploy(chatId, phone) {
             pairedAt: new Date()
         });
 
-        // Generate QR code (optional)
         let qrImageBuffer = null;
         try {
             const qrDataUrl = await QRCode.toDataURL(pairCode);
@@ -220,16 +185,12 @@ const handlers = {
         if (!await isMember(chatId)) {
             return bot.sendMessage(
                 chatId,
-                `Hello ${firstName}! 👋\n\nTo use this bot, you must join our Telegram channel and group first:\n\n` +
-                `📢 Channel: ${CHANNEL_USERNAME}\n` +
-                `👥 Group: [Join Here](${GROUP_INVITE_LINK})\n\n` +
-                `After joining, click /start again.`,
+                `Hello ${firstName}! 👋\n\nTo use this bot, you must join our Telegram channel first:\n\n📢 Channel: ${CHANNEL_USERNAME}\n\nAfter joining, click /start again.`,
                 {
                     parse_mode: 'Markdown',
                     reply_markup: {
                         inline_keyboard: [
-                            [{ text: '📢 Join Channel', url: 'https://t.me/stanytech12' }],
-                            [{ text: '👥 Join Group', url: GROUP_INVITE_LINK }]
+                            [{ text: '📢 Join Channel', url: 'https://t.me/stanytech12' }]
                         ]
                     }
                 }
@@ -385,7 +346,6 @@ const handlers = {
             'meridianbet', 'gsb', 'bet365', 'megapari', 'betpawa'
         ];
 
-        // If no arguments, show the manual
         if (!args || args.length === 0) {
             const manual = `
 ╭─── • 📘 • ───╮
@@ -414,70 +374,36 @@ const handlers = {
      • Company name
      • Expected burst multiplier (e.g., 2.35x)
      • Confidence percentage (75‑99%)
-     • Market analysis & recommended action
+     • Recommended cashout point
    - The message auto‑deletes after 5 minutes.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-🎯 *PLAYING STRATEGIES (with real examples)*
+🎯 *PLAYING STRATEGIES*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 
-┌─── 🛡️ *STRATEGY 1: CONSERVATIVE (Low Risk)*
-│  • Bet amount: 1,000 TZS
-│  • Target: 1.5x – 2.0x
-│  • How: When you see a signal for a company, open that site.
-│         Place your bet. Watch the multiplier live.
-│         As soon as it passes 1.5x, cash out.
-│  • Example:
-│      - Signal: 1win – expected 2.3x, confidence 88%
-│      - You bet 1,000 TZS on 1win.
-│      - Multiplier reaches 1.7x → you cash out.
-│      - Profit = 1,000 × (1.7 – 1) = 700 TZS.
+┌─── 🛡️ *CONSERVATIVE*
+│  • Bet: 1,000 TZS, cashout at 1.5x-2.0x
+│  • Example: Signal says cashout at 1.8x → you cash out there.
 └────────────────────────
 
-┌─── ⚖️ *STRATEGY 2: MODERATE (Balanced)*
-│  • Bet amount: 2,000 TZS
-│  • Target: 3.0x – 5.0x
-│  • How: Look for signals with confidence >85% and analysis mentioning
-│         "two consecutive low rounds" or "green spike". Place bet and
-│         let it ride until 3.0x, then cash out.
-│  • Example:
-│      - Signal: betpawa – expected 4.2x, confidence 92%
-│      - You bet 2,000 TZS on betpawa.
-│      - Multiplier hits 3.8x → cash out.
-│      - Profit = 2,000 × (3.8 – 1) = 5,600 TZS.
+┌─── ⚖️ *MODERATE*
+│  • Bet: 2,000 TZS, cashout at 3.0x-5.0x
+│  • Wait for high‑confidence signals.
 └────────────────────────
 
-┌─── 💎 *STRATEGY 3: AGGRESSIVE (High Risk / High Reward)*
-│  • Bet amount: 500 TZS (small)
-│  • Target: 10.0x – 20.0x
-│  • How: Use only when analysis says "High reward potential" or
-│         "Pattern matches previous winning rounds". Bet small and
-│         hold until a very high multiplier.
-│  • Example:
-│      - Signal: sportybet – expected 15.7x, confidence 79%
-│      - You bet 500 TZS on sportybet.
-│      - Multiplier climbs to 12.4x → cash out.
-│      - Profit = 500 × (12.4 – 1) = 5,700 TZS.
+┌─── 💎 *AGGRESSIVE*
+│  • Bet: 500 TZS, hold for 10x+
+│  • Use only on special signals.
 └────────────────────────
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 🧠 *PRO TIPS*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-✓ Always wait for the full signal – don't rush.
-✓ Use a stop‑loss: if you lose 3 signals in a row, take a break.
-✓ Keep track of your wins/losses with a small notebook.
-✓ These signals are generated by advanced algorithms – treat them as
-  high‑probability predictions, not guarantees.
-✓ Play responsibly – never bet more than you can afford to lose.
+✓ Always cash out at the recommended point.
+✓ Never chase losses.
+✓ Play responsibly.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━
-⏱️ *SESSION TIMING*
-━━━━━━━━━━━━━━━━━━━━━━━━━
-• Each signal is sent every 2 minutes.
-• After your requested number of signals, the market closes for 30 minutes.
-• You can start a new session after the cooldown.
-
-_🥀 Trust the shadows, not the pilot. Good luck._
+_🥀 Trust the shadows, not the pilot._
 `;
             return sendWithImage(chatId, manual, [{ text: '🚀 Deploy', callback_data: 'deploy' }]);
         }
@@ -506,36 +432,37 @@ _🥀 Trust the shadows, not the pilot. Good luck._
         await new Promise(resolve => setTimeout(resolve, 3000));
 
         const phrases = [
-            "Observing low blues (1.0x-1.5x) – pattern indicates possible burst soon.",
-            "High volatility detected – consider early cashout at 2.0x.",
-            "Trend shows increasing multiplier – safe exit at 2.5x.",
-            "Two consecutive low rounds – next likely high. Target 5.0x.",
-            "Red candles forming – risk level moderate. Cashout at 1.8x.",
-            "Stabilising after drop – potential 3.0x within next 3 rounds.",
-            "AI analysis: 85% chance of burst between 2.0x-4.0x.",
-            "Market sentiment positive – aim for 6.0x but be ready to cashout.",
-            "Historical data suggests 2.2x is a safe threshold.",
-            "Watch for green spikes – they often precede a crash.",
-            "Early crash detected – take profits quickly.",
-            "Steady climb – consider holding for 3.0x+.",
-            "Risk level: moderate – recommended cashout at 2.8x.",
-            "High reward potential but be cautious.",
-            "Pattern matches previous winning rounds."
+            "Low volatility – cashout at 1.5x.",
+            "Green spike detected – cashout at 2.2x.",
+            "Stable climb – recommended cashout 2.8x.",
+            "High confidence – cashout at 3.5x.",
+            "Early warning – cashout at 1.8x.",
+            "Strong trend – cashout at 4.0x.",
+            "Moderate risk – cashout at 2.0x.",
+            "Safe pattern – cashout at 1.6x.",
+            "Aggressive move – cashout at 5.0x."
         ];
 
         for (let i = 1; i <= count; i++) {
             const odds = (Math.random() * (4.5 - 1.2) + 1.2).toFixed(2);
             const confidence = Math.floor(Math.random() * (99 - 75) + 75);
+            // Generate cashout suggestion (between 1.2 and odds)
+            const cashout = (Math.random() * (parseFloat(odds) - 1.2) + 1.2).toFixed(2);
             const phrase = phrases[Math.floor(Math.random() * phrases.length)];
 
             const signalText = 
                 `╭── • 📊 • ──╮\n  SIGNAL #${i} – ${company.toUpperCase()}\n╰── • 📊 • ──╯\n\n` +
                 `🚀 *Expected burst:* ${odds}x\n` +
+                `💰 *Recommended cashout:* ${cashout}x\n` +
                 `📊 *Confidence:* ${confidence}%\n` +
                 `💡 *Analysis:* ${phrase}\n\n` +
                 `_This signal will auto‑delete in 5 minutes._`;
 
-            const sentMsg = await bot.sendMessage(chatId, signalText, { parse_mode: 'Markdown' });
+            // Send signal with the aviator image
+            const sentMsg = await bot.sendPhoto(chatId, AVIATOR_IMAGE, {
+                caption: signalText,
+                parse_mode: 'Markdown'
+            });
             setTimeout(() => bot.deleteMessage(chatId, sentMsg.message_id).catch(() => {}), 300000);
 
             if (i < count) {
@@ -642,14 +569,6 @@ function setupBot() {
     bot = new TelegramBot(token, { polling: true });
     global.bot = bot;
 
-    // Resolve group ID from invite link
-    bot.getChat(GROUP_INVITE_LINK.split('/').pop()).then(chat => {
-        GROUP_ID = chat.id;
-        console.log(`✅ Group resolved: ${GROUP_ID}`);
-    }).catch(err => {
-        console.error('❌ Could not resolve group ID. Group check disabled.', err.message);
-    });
-
     // Polling error handler – fixes 409 and EFATAL
     bot.on('polling_error', (error) => {
         console.error('Telegram polling error:', error.message);
@@ -668,7 +587,6 @@ function setupBot() {
         const chatId = msg.chat.id;
         const text = msg.text.trim();
 
-        // If it's a command starting with /
         if (text.startsWith('/')) {
             const parts = text.slice(1).split(' ');
             const cmd = parts[0].toLowerCase();
@@ -694,7 +612,7 @@ function setupBot() {
         }
     });
 
-    // Callback queries (buttons)
+    // Callback queries
     bot.on('callback_query', async (callbackQuery) => {
         const msg = callbackQuery.message;
         const chatId = msg.chat.id;
