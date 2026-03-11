@@ -6,13 +6,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0a0a12">
-  <meta name="description" content="STANY PAIRING - Pair Code">
+  <meta name="description" content="INSIDIOUS PAIRING - Get your 8-digit code">
   
-  <meta property="og:title" content="STANY TZ • Pair Code">
-  <meta property="og:description" content="Enter your phone number to get pairing code">
+  <meta property="og:title" content="INSIDIOUS • Pair Code">
+  <meta property="og:description" content="Enter your phone number to get a real WhatsApp pairing code">
   <meta property="og:image" content="https://raw.githubusercontent.com/Official123-12/STANYFREEBOT-/refs/heads/main/IMG_1377.jpeg">
   
-  <title>STANY TZ • Pair Code</title>
+  <title>INSIDIOUS • Pair Code</title>
   
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
@@ -510,7 +510,6 @@
             btn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy Code';
           }, 2000);
         } catch {
-          // fallback
           const ta = document.createElement('textarea');
           ta.value = code;
           document.body.appendChild(ta);
@@ -538,21 +537,25 @@
       setStatus('Requesting pair code...', 'loading');
 
       try {
-        // Real backend call to /code
         const response = await fetch(`/code?number=${raw}`, {
           method: 'GET',
-          headers: { 'Accept': 'application/json' },
-          credentials: 'same-origin'
+          headers: { 'Accept': 'application/json' }
         });
 
+        const data = await response.json();
+
         if (!response.ok) {
-          const err = await response.json().catch(() => ({}));
-          throw new Error(err.message || `HTTP ${response.status}`);
+          throw new Error(data.error || `HTTP ${response.status}`);
         }
 
-        const data = await response.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Pairing failed');
+        }
+
         const pairCode = data.code || data.pairCode;
-        if (!pairCode) throw new Error(data.message || 'No code in response');
+        if (!pairCode) {
+          throw new Error(data.error || data.message || 'No code in response');
+        }
 
         setStatus('Pair code generated successfully!', 'success');
         showCode(pairCode);
