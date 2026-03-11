@@ -1,12 +1,11 @@
-import 'dotenv/config';
-import express from 'express';
-import bodyParser from 'body-parser';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import mongoose from 'mongoose';
-import fs from 'fs-extra';
-import pino from 'pino';
-import {
+require('dotenv').config();
+const express = require('express');
+const bodyParser = require('body-parser');
+const path = require('path');
+const mongoose = require('mongoose');
+const fs = require('fs-extra');
+const pino = require('pino');
+const {
     makeWASocket,
     useMultiFileAuthState,
     delay,
@@ -15,23 +14,19 @@ import {
     jidNormalizedUser,
     fetchLatestBaileysVersion,
     DisconnectReason
-} from '@whiskeysockets/baileys';
+} = require('@whiskeysockets/baileys');
 
-import qrRouter from './qr.js';
-import pairRouter from './pair.js';
-import { Session } from './database/models.js';
-import handler from './handler.js';
-import config from './config.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const qrRouter = require('./qr');
+const pairRouter = require('./pair');
+const { Session } = require('./database/models');
+const handler = require('./handler');
+const config = require('./config');
 
 const app = express();
-const PORT = process.env.PORT || 8000;
 
 // ==================== MongoDB Connection ====================
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://sila_md:sila0022@sila.67mxtd7.mongodb.net/insidious?retryWrites=true&w=majority';
-mongoose.connect(MONGODB_URI, {
+const dbPromise = mongoose.connect(MONGODB_URI, {
     serverSelectionTimeoutMS: 30000,
     socketTimeoutMS: 45000,
     maxPoolSize: 10
@@ -39,6 +34,7 @@ mongoose.connect(MONGODB_URI, {
     console.log('✅ MongoDB connected');
     // Start bot manager after DB is ready
     startBotManager();
+    return mongoose.connection;
 }).catch(err => {
     console.error('❌ MongoDB connection error:', err);
     process.exit(1);
@@ -82,7 +78,6 @@ async function startPersistentBot(number) {
     const sessionDir = path.join(SESSION_DIR, sanitizedNumber);
     await fs.ensureDir(sessionDir);
 
-    // Load session from DB
     const session = await Session.findOne({ number: sanitizedNumber });
     if (session && session.sessionData) {
         await fs.writeFile(
@@ -114,7 +109,6 @@ async function startPersistentBot(number) {
 
     persistentBots.set(sanitizedNumber, { socket: sock, reconnectTimer: null });
 
-    // Creds update
     sock.ev.on('creds.update', async () => {
         await saveCreds();
         try {
@@ -126,19 +120,16 @@ async function startPersistentBot(number) {
         }
     });
 
-    // Connection update
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
 
         if (connection === 'open') {
             console.log(`✅ Bot ${sanitizedNumber} connected!`);
 
-            // Initialize handler
             if (handler && handler.init) {
                 await handler.init(sock);
             }
 
-            // Clear any reconnect timer
             const bot = persistentBots.get(sanitizedNumber);
             if (bot && bot.reconnectTimer) {
                 clearTimeout(bot.reconnectTimer);
@@ -156,7 +147,6 @@ async function startPersistentBot(number) {
                 await fs.remove(sessionDir);
                 persistentBots.delete(sanitizedNumber);
             } else {
-                // Schedule reconnect
                 console.log(`🔄 Reconnecting ${sanitizedNumber} in 10 seconds...`);
                 const bot = persistentBots.get(sanitizedNumber);
                 if (bot) {
@@ -169,7 +159,6 @@ async function startPersistentBot(number) {
         }
     });
 
-    // Message handler
     sock.ev.on('messages.upsert', async (m) => {
         try {
             if (handler && typeof handler === 'function') {
@@ -180,7 +169,6 @@ async function startPersistentBot(number) {
         }
     });
 
-    // Group updates
     sock.ev.on('group-participants.update', async (update) => {
         try {
             if (handler && handler.handleGroupUpdate) {
@@ -191,7 +179,6 @@ async function startPersistentBot(number) {
         }
     });
 
-    // Calls
     sock.ev.on('call', async (call) => {
         try {
             if (handler && handler.handleCall) {
@@ -221,12 +208,11 @@ async function stopPersistentBot(number) {
 
 async function startBotManager() {
     console.log('🤖 Starting bot manager...');
-    // Load all sessions from DB
     const sessions = await Session.find({});
     console.log(`📦 Found ${sessions.length} sessions in DB`);
     for (const session of sessions) {
         await startPersistentBot(session.number);
-        await delay(2000); // avoid flooding
+        await delay(2000);
     }
 }
 
@@ -270,9 +256,4 @@ app.get('/health', (req, res) => {
     });
 });
 
-// ==================== Start Server ====================
-app.listen(PORT, () => {
-    console.log(`🌐 Server running on http://localhost:${PORT}`);
-});
-
-export default app;
+module.exports = { app, dbPromise };
