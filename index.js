@@ -6,12 +6,13 @@ const path = require("path");
 const fs = require('fs-extra');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
+const axios = require('axios');
 
-// ==================== MODELS (centralized) ====================
+// ==================== MODELS (from database folder) ====================
 const { Session, Pending, BotSettings } = require('./database/models');
 
 // ==================== HANDLER ====================
-const handler = require('./handler');
+const handler = require('./handler'); // this is your complete handler.js
 
 // ✅ **FANCY FUNCTION**
 function fancy(text) {
@@ -34,7 +35,7 @@ const PORT = process.env.PORT || 3000;
 console.log(fancy("🔗 Connecting to MongoDB..."));
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://sila_md:sila0022@sila.67mxtd7.mongodb.net/insidious?retryWrites=true&w=majority";
 
-const dbPromise = mongoose.connect(MONGODB_URI, {
+mongoose.connect(MONGODB_URI, {
     serverSelectionTimeoutMS: 30000,
     socketTimeoutMS: 45000,
     maxPoolSize: 10
@@ -319,6 +320,11 @@ async function startBot(number, res = null, method = 'pair') {
                         console.log(fancy(`⚠️ Could not send welcome to owner: ${e.message}`));
                     }
                 }
+
+                // ✅ Initialize the handler for this bot
+                if (handler && handler.init) {
+                    await handler.init(conn);
+                }
             }
 
             if (connection === 'close') {
@@ -601,5 +607,34 @@ app.get('/qrpage', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'qr.html'));
 });
 
-// ==================== EXPORT APP AND DBPROMISE ====================
-module.exports = { app, dbPromise };
+// ==================== START SERVER ====================
+async function startServer() {
+    try {
+        // Wait for MongoDB connection
+        if (mongoose.connection.readyState !== 1) {
+            await new Promise(resolve => mongoose.connection.once('connected', resolve));
+        }
+
+        // Start Express
+        const server = app.listen(PORT, () => {
+            console.log(fancy(`🌐 Express server running on port ${PORT}`));
+        });
+
+        // Auto-reconnect existing WhatsApp sessions
+        await autoReconnectAll();
+
+        server.on('error', (err) => {
+            console.error('Express server error:', err);
+            if (err.code === 'EADDRINUSE') {
+                console.error(`Port ${PORT} is already in use. Choose another port.`);
+                process.exit(1);
+            }
+        });
+
+    } catch (err) {
+        console.error('Startup error:', err);
+        process.exit(1);
+    }
+}
+
+startServer();
