@@ -46,6 +46,17 @@ const dbPromise = mongoose.connect(MONGODB_URI, {
     process.exit(1); // Exit if database fails – it's required
 });
 
+// ✅ **MIDDLEWARE to check DB connection before proceeding**
+app.use((req, res, next) => {
+    if (mongoose.connection.readyState !== 1) {
+        return res.status(503).json({ 
+            success: false, 
+            error: 'Database not connected. Please try again in a few seconds.' 
+        });
+    }
+    next();
+});
+
 // ✅ **ACTIVE SOCKETS MAP**
 const activeSockets = new Map(); // key: number (sanitized) -> socket
 const socketCreationTime = new Map();
@@ -113,7 +124,7 @@ function generateSecret() {
     return 'INS' + crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
-// ==================== BOT START FUNCTION (PER NUMBER) – supports both pair and QR ====================
+// ==================== BOT START FUNCTION (PER NUMBER) ====================
 
 async function startBot(number, res = null, method = 'pair') {
     const sanitizedNumber = number.replace(/[^0-9]/g, '');
@@ -382,7 +393,7 @@ async function autoReconnectAll() {
         for (const session of sessions) {
             if (!activeSockets.has(session.number)) {
                 console.log(fancy(`Reconnecting ${session.number}...`));
-                startBot(session.number, null, 'pair'); // Default to pair (safe)
+                startBot(session.number, null, 'pair');
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
