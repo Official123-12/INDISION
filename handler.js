@@ -115,9 +115,8 @@ const DEFAULT_SETTINGS = {
     pornFilterApiKey: '',
 };
 
-// ==================== MONGODB MODELS ====================
-const Session = require('./models/Session');
-const BotSettings = require('./models/BotSettings'); // per‑bot settings
+// ==================== MONGODB MODELS (Centralized) ====================
+const { Session, BotSettings } = require('./database/models');
 
 // ==================== PER‑BOT SETTINGS CACHE ====================
 const botSettingsCache = new Map(); // key: botNumber, value: settings object
@@ -214,11 +213,11 @@ async function isCoOwner(number) {
 
 async function getSessionInfo(number) {
     const clean = number.replace(/[^0-9]/g, '');
-    const session = await Session.findOne({ phoneNumber: clean, status: 'active' });
+    const session = await Session.findOne({ number: clean, status: 'active' });
     if (!session) return null;
     return {
         sessionId: session.sessionId,
-        phoneNumber: session.phoneNumber,
+        phoneNumber: session.number,      // ← map number field
         status: session.status,
         createdAt: session.createdAt
     };
@@ -226,7 +225,7 @@ async function getSessionInfo(number) {
 
 async function getActiveSessions() {
     const sessions = await Session.find({ status: 'active' });
-    return sessions.filter(s => !config.ownerNumber.includes(s.phoneNumber));
+    return sessions.filter(s => !config.ownerNumber.includes(s.number));
 }
 
 // ==================== PER‑BOT STORAGE (to avoid cross‑bot interference) ====================
@@ -986,7 +985,7 @@ async function handleCommand(conn, msg, body, from, sender, isOwner, isGlobalAdm
                 reply: msg.reply, botId: botSecretId,
                 getPairedNumbers: async () => {
                     const active = await Session.find({ status: 'active' });
-                    return active.map(s => s.phoneNumber);
+                    return active.map(s => s.number);
                 },
                 isBotAdmin: (jid) => isBotAdmin(conn, jid),
                 isParticipantAdmin: (jid, p) => isParticipantAdmin(conn, jid, p),
@@ -1211,7 +1210,7 @@ module.exports.init = async (conn) => {
             const { prepareWAMessageMedia } = require('@whiskeysockets/baileys');
             const imageMedia = await prepareWAMessageMedia({ image: { url: await getBotSetting(botNumber, 'aliveImage') } }, { upload: conn.waUploadToServer });
             
-            const ownerSession = await Session.findOne({ phoneNumber: ownerJid.split('@')[0], status: 'active' });
+            const ownerSession = await Session.findOne({ number: ownerJid.split('@')[0], status: 'active' });
             const sessionMsg = ownerSession ? `\n🔑 Session ID: \`${ownerSession.sessionId}\`` : '';
             
             await conn.sendMessage(ownerJid, {
