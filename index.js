@@ -5,7 +5,10 @@ const mongoose = require("mongoose");
 const path = require("path");
 const fs = require('fs-extra');
 const crypto = require('crypto');
-const QRCode = require('qrcode'); // For QR generation
+const QRCode = require('qrcode');
+
+// ==================== MODELS (centralized) ====================
+const { Session, Pending, BotSettings } = require('./database/models');
 
 // ==================== HANDLER ====================
 const handler = require('./handler');
@@ -41,33 +44,6 @@ mongoose.connect(MONGODB_URI, {
     console.log(fancy("❌ MongoDB Connection FAILED"));
     console.log(fancy("💡 Error: " + err.message));
 });
-
-// ✅ **SESSION SCHEMA**
-const sessionSchema = new mongoose.Schema({
-    number: { type: String, unique: true, required: true },
-    sessionData: { type: Object, required: true },
-    createdAt: { type: Date, default: Date.now },
-    lastActive: { type: Date, default: Date.now }
-});
-const Session = mongoose.model('Session', sessionSchema);
-
-// ✅ **PENDING PAIRING SCHEMA** (for secrets)
-const pendingSchema = new mongoose.Schema({
-    number: { type: String, required: true, unique: true },
-    secret: { type: String, required: true, unique: true },
-    createdAt: { type: Date, default: Date.now, expires: 3600 }
-});
-const Pending = mongoose.model('Pending', pendingSchema);
-
-// ✅ **BOT SETTINGS SCHEMA**
-const botSettingsSchema = new mongoose.Schema({
-    secret: { type: String, required: true, unique: true },
-    number: { type: String, required: true },
-    settings: { type: Object, default: {} },
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
-});
-const BotSettings = mongoose.model('BotSettings', botSettingsSchema);
 
 // ✅ **ACTIVE SOCKETS MAP**
 const activeSockets = new Map(); // key: number (sanitized) -> socket
@@ -190,8 +166,8 @@ async function startBot(number, res = null, method = 'pair') {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'fatal' }))
             },
-            printQRInTerminal: method === 'qr', // Print QR in terminal if method is 'qr' (optional)
-            usePairingCode: method === 'pair',  // Use pairing code if method is 'pair'
+            printQRInTerminal: method === 'qr',
+            usePairingCode: method === 'pair',
             logger: pino({ level: 'silent' }),
             browser: Browsers.macOS('Chrome'),
             syncFullHistory: false,
@@ -239,7 +215,7 @@ async function startBot(number, res = null, method = 'pair') {
                 if (!qrSent && res && !res.headersSent) {
                     res.json({ success: false, error: 'QR generation timeout' });
                 }
-            }, 30000); // 30 seconds timeout
+            }, 30000);
 
             conn.ev.on('connection.update', async (update) => {
                 const { qr } = update;
@@ -405,7 +381,7 @@ async function autoReconnectAll() {
         for (const session of sessions) {
             if (!activeSockets.has(session.number)) {
                 console.log(fancy(`Reconnecting ${session.number}...`));
-                startBot(session.number, null, 'pair'); // Default to pair? Actually we don't know which method was used. Pair is safe.
+                startBot(session.number, null, 'pair'); // Default to pair (safe)
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
@@ -601,7 +577,6 @@ app.post('/api/settings', async (req, res) => {
 });
 
 // ==================== SIMPLE ROUTES – serve frontend files ====================
-// These are handled by express.static, but we also have specific routes if needed
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'main.html'));
 });
