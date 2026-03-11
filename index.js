@@ -4,34 +4,24 @@ const pino = require("pino");
 const mongoose = require("mongoose");
 const path = require("path");
 const fs = require('fs-extra');
-const crypto = require('crypto'); // for generating secrets
+const crypto = require('crypto');
+const QRCode = require('qrcode'); // For QR generation
 
 // ==================== HANDLER ====================
 const handler = require('./handler');
 
-// ✅ **FANCY FUNCTION** (imebaki sawa)
+// ✅ **FANCY FUNCTION**
 function fancy(text) {
     if (!text || typeof text !== 'string') return text;
-    
-    try {
-        const fancyMap = {
-            a: 'ᴀ', b: 'ʙ', c: 'ᴄ', d: 'ᴅ', e: 'ᴇ', f: 'ꜰ', g: 'ɢ', h: 'ʜ', i: 'ɪ',
-            j: 'ᴊ', k: 'ᴋ', l: 'ʟ', m: 'ᴍ', n: 'ɴ', o: 'ᴏ', p: 'ᴘ', q: 'ǫ', r: 'ʀ',
-            s: 'ꜱ', t: 'ᴛ', u: 'ᴜ', v: 'ᴠ', w: 'ᴡ', x: 'x', y: 'ʏ', z: 'ᴢ',
-            A: 'ᴀ', B: 'ʙ', C: 'ᴄ', D: 'ᴅ', E: 'ᴇ', F: 'ꜰ', G: 'ɢ', H: 'ʜ', I: 'ɪ',
-            J: 'ᴊ', K: 'ᴋ', L: 'ʟ', M: 'ᴍ', N: 'ɴ', O: 'ᴏ', P: 'ᴘ', Q: 'ǫ', R: 'ʀ',
-            S: 'ꜱ', T: 'ᴛ', U: 'ᴜ', V: 'ᴠ', W: 'ᴡ', X: 'x', Y: 'ʏ', Z: 'ᴢ'
-        };
-        
-        let result = '';
-        for (let i = 0; i < text.length; i++) {
-            const char = text[i];
-            result += fancyMap[char] || char;
-        }
-        return result;
-    } catch (e) {
-        return text;
-    }
+    const map = {
+        a: 'ᴀ', b: 'ʙ', c: 'ᴄ', d: 'ᴅ', e: 'ᴇ', f: 'ꜰ', g: 'ɢ', h: 'ʜ', i: 'ɪ',
+        j: 'ᴊ', k: 'ᴋ', l: 'ʟ', m: 'ᴍ', n: 'ɴ', o: 'ᴏ', p: 'ᴘ', q: 'ǫ', r: 'ʀ',
+        s: 'ꜱ', t: 'ᴛ', u: 'ᴜ', v: 'ᴠ', w: 'ᴡ', x: 'x', y: 'ʏ', z: 'ᴢ',
+        A: 'ᴀ', B: 'ʙ', C: 'ᴄ', D: 'ᴅ', E: 'ᴇ', F: 'ꜰ', G: 'ɢ', H: 'ʜ', I: 'ɪ',
+        J: 'ᴊ', K: 'ᴋ', L: 'ʟ', M: 'ᴍ', N: 'ɴ', O: 'ᴏ', P: 'ᴘ', Q: 'ǫ', R: 'ʀ',
+        S: 'ꜱ', T: 'ᴛ', U: 'ᴜ', V: 'ᴠ', W: 'ᴡ', X: 'x', Y: 'ʏ', Z: 'ᴢ'
+    };
+    return text.split('').map(c => map[c] || c).join('');
 }
 
 const app = express();
@@ -52,7 +42,7 @@ mongoose.connect(MONGODB_URI, {
     console.log(fancy("💡 Error: " + err.message));
 });
 
-// ✅ **SESSION SCHEMA – kuhifadhi creds za kila namba**
+// ✅ **SESSION SCHEMA**
 const sessionSchema = new mongoose.Schema({
     number: { type: String, unique: true, required: true },
     sessionData: { type: Object, required: true },
@@ -61,15 +51,15 @@ const sessionSchema = new mongoose.Schema({
 });
 const Session = mongoose.model('Session', sessionSchema);
 
-// ✅ **PENDING PAIRING SCHEMA – kuhifadhi secret kabla ya kuunganishwa**
+// ✅ **PENDING PAIRING SCHEMA** (for secrets)
 const pendingSchema = new mongoose.Schema({
     number: { type: String, required: true, unique: true },
     secret: { type: String, required: true, unique: true },
-    createdAt: { type: Date, default: Date.now, expires: 3600 } // expires after 1 hour
+    createdAt: { type: Date, default: Date.now, expires: 3600 }
 });
 const Pending = mongoose.model('Pending', pendingSchema);
 
-// ✅ **BOT SETTINGS SCHEMA – mipangilio ya kila bot inayomilikiwa na secret**
+// ✅ **BOT SETTINGS SCHEMA**
 const botSettingsSchema = new mongoose.Schema({
     secret: { type: String, required: true, unique: true },
     number: { type: String, required: true },
@@ -79,13 +69,13 @@ const botSettingsSchema = new mongoose.Schema({
 });
 const BotSettings = mongoose.model('BotSettings', botSettingsSchema);
 
-// ✅ **ACTIVE SOCKETS MAP** (badala ya globalConn moja)
-const activeSockets = new Map(); // key: namba (sanitized) -> socket
+// ✅ **ACTIVE SOCKETS MAP**
+const activeSockets = new Map(); // key: number (sanitized) -> socket
 const socketCreationTime = new Map();
 
 // ✅ **MIDDLEWARE**
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'))); // Serve frontend files
 
 // ✅ **CREATE PUBLIC FOLDER IF NOT EXISTS**
 fs.ensureDirSync(path.join(__dirname, 'public'));
@@ -146,22 +136,24 @@ function generateSecret() {
     return 'INS' + crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
-// ==================== BOT START FUNCTION (PER NUMBER) ====================
+// ==================== BOT START FUNCTION (PER NUMBER) – supports both pair and QR ====================
 
-async function startBot(number, res = null) {
+async function startBot(number, res = null, method = 'pair') {
     const sanitizedNumber = number.replace(/[^0-9]/g, '');
-    
-    // Check if already connected
+
+    // If already connected, disconnect and delete old session
     if (activeSockets.has(sanitizedNumber)) {
-        console.log(fancy(`⚠️ ${sanitizedNumber} already connected`));
-        if (res && !res.headersSent) {
-            return res.json({
-                success: false,
-                status: 'already_connected',
-                message: 'Number is already connected'
-            });
-        }
-        return;
+        console.log(fancy(`⚠️ ${sanitizedNumber} already connected, disconnecting old session...`));
+        const oldSocket = activeSockets.get(sanitizedNumber);
+        try {
+            await oldSocket.ws.close();
+            oldSocket.ev.removeAllListeners();
+        } catch (e) {}
+        activeSockets.delete(sanitizedNumber);
+        socketCreationTime.delete(sanitizedNumber);
+        await deleteSessionFromDB(sanitizedNumber);
+        const sessionDir = path.join(__dirname, 'sessions', sanitizedNumber);
+        await fs.remove(sessionDir);
     }
 
     // Prevent multiple connection attempts
@@ -176,14 +168,11 @@ async function startBot(number, res = null) {
     global[lockKey] = true;
 
     try {
-        // Session directory – tumia sessions folder kwa kila namba
         const sessionDir = path.join(__dirname, 'sessions', sanitizedNumber);
         await fs.ensureDir(sessionDir);
 
-        // Load existing session from DB
+        // Load existing session from DB (if any) – but we already deleted above, so none should exist
         const existingSession = await loadSessionFromDB(sanitizedNumber);
-        
-        // If session exists in DB but not locally, restore it
         if (existingSession && !fs.existsSync(path.join(sessionDir, 'creds.json'))) {
             await fs.writeFile(
                 path.join(sessionDir, 'creds.json'),
@@ -192,21 +181,17 @@ async function startBot(number, res = null) {
             console.log(fancy(`🔄 Restored session for ${sanitizedNumber} from DB`));
         }
 
-        // Get Baileys version
         const { version } = await fetchLatestBaileysVersion();
-        
-        // Load auth state
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
 
-        // Create socket
         const conn = makeWASocket({
             version,
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'fatal' }))
             },
-            printQRInTerminal: false,
-            usePairingCode: !existingSession,
+            printQRInTerminal: method === 'qr', // Print QR in terminal if method is 'qr' (optional)
+            usePairingCode: method === 'pair',  // Use pairing code if method is 'pair'
             logger: pino({ level: 'silent' }),
             browser: Browsers.macOS('Chrome'),
             syncFullHistory: false,
@@ -214,23 +199,21 @@ async function startBot(number, res = null) {
             defaultQueryTimeoutMs: 60000
         });
 
-        // Store socket
         activeSockets.set(sanitizedNumber, conn);
         socketCreationTime.set(sanitizedNumber, Date.now());
 
-        // ==================== PAIRING CODE (if new session) ====================
-        if (!existingSession) {
-            // Generate a secret for this pending pairing
-            const secret = generateSecret();
-            await Pending.create({ number: sanitizedNumber, secret });
+        // Generate a secret for this pending pairing
+        const secret = generateSecret();
+        await Pending.create({ number: sanitizedNumber, secret });
 
-            // Tuma pairing code baada ya muda mfupi
+        if (method === 'pair') {
+            // Pairing code flow
             setTimeout(async () => {
                 try {
                     await new Promise(resolve => setTimeout(resolve, 2000));
                     const code = await conn.requestPairingCode(sanitizedNumber);
                     console.log(fancy(`🔑 Pairing Code for ${sanitizedNumber}: ${code}`));
-                    
+
                     if (res && !res.headersSent) {
                         return res.json({
                             success: true,
@@ -250,21 +233,38 @@ async function startBot(number, res = null) {
                 }
             }, 3000);
         } else {
-            // If reconnecting, get the secret from BotSettings or create one
-            let settings = await BotSettings.findOne({ number: sanitizedNumber });
-            if (!settings) {
-                // Create a new secret for existing session (backward compatibility)
-                const secret = generateSecret();
-                settings = await BotSettings.create({ secret, number: sanitizedNumber, settings: {} });
-            }
-            if (res && !res.headersSent) {
-                res.json({
-                    success: true,
-                    status: 'reconnecting',
-                    secret: settings.secret,
-                    message: 'Reconnecting with existing session'
-                });
-            }
+            // QR code flow – wait for 'qr' event
+            let qrSent = false;
+            const qrTimeout = setTimeout(() => {
+                if (!qrSent && res && !res.headersSent) {
+                    res.json({ success: false, error: 'QR generation timeout' });
+                }
+            }, 30000); // 30 seconds timeout
+
+            conn.ev.on('connection.update', async (update) => {
+                const { qr } = update;
+                if (qr && !qrSent) {
+                    qrSent = true;
+                    clearTimeout(qrTimeout);
+                    try {
+                        const qrImage = await QRCode.toDataURL(qr);
+                        console.log(fancy(`📱 QR Code generated for ${sanitizedNumber}`));
+                        if (res && !res.headersSent) {
+                            res.json({
+                                success: true,
+                                qr: qrImage,
+                                secret: secret,
+                                message: 'Scan the QR code with WhatsApp'
+                            });
+                        }
+                    } catch (err) {
+                        console.error(fancy(`❌ QR generation error for ${sanitizedNumber}:`), err.message);
+                        if (res && !res.headersSent) {
+                            res.json({ success: false, error: 'Failed to generate QR image' });
+                        }
+                    }
+                }
+            });
         }
 
         // ==================== SESSION UPDATE HANDLER ====================
@@ -283,17 +283,12 @@ async function startBot(number, res = null) {
         conn.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect } = update;
 
-            if (connection === 'connecting') {
-                console.log(fancy(`🔄 Connecting ${sanitizedNumber}...`));
-            }
-
             if (connection === 'open') {
                 console.log(fancy(`✅ ${sanitizedNumber} connected!`));
 
                 // When connected, associate the pending secret with this number in BotSettings
                 const pending = await Pending.findOne({ number: sanitizedNumber });
                 if (pending) {
-                    // Create or update BotSettings with the secret
                     await BotSettings.findOneAndUpdate(
                         { secret: pending.secret },
                         { number: sanitizedNumber, updatedAt: Date.now() },
@@ -302,8 +297,8 @@ async function startBot(number, res = null) {
                     await pending.deleteOne();
                     console.log(fancy(`🔗 Linked secret ${pending.secret} to number ${sanitizedNumber}`));
                 }
-                
-                // Send welcome message to owner (only if this number is the main owner)
+
+                // Send welcome message to owner if this number is in owner list
                 if (config.ownerNumber && config.ownerNumber.includes(sanitizedNumber)) {
                     try {
                         const userJid = jidNormalizedUser(conn.user.id);
@@ -319,10 +314,10 @@ async function startBot(number, res = null) {
 
 👑 *Developer:* STANYTZ
 💾 *Version:* 2.1.1 | Year: 2025`;
-                        
+
                         await conn.sendMessage(userJid, {
                             image: { url: config.botImage || "https://files.catbox.moe/f3c07u.jpg" },
-                            caption: welcomeMsg,
+                            caption: fancy(welcomeMsg),
                             contextInfo: {
                                 isForwarded: true,
                                 forwardingScore: 999,
@@ -342,11 +337,9 @@ async function startBot(number, res = null) {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
                 console.log(fancy(`❌ ${sanitizedNumber} disconnected: ${statusCode}`));
 
-                // Remove from active sockets
                 activeSockets.delete(sanitizedNumber);
                 socketCreationTime.delete(sanitizedNumber);
 
-                // If logged out, delete session
                 if (statusCode === DisconnectReason.loggedOut) {
                     console.log(fancy(`🔓 ${sanitizedNumber} logged out, deleting session`));
                     await deleteSessionFromDB(sanitizedNumber);
@@ -355,7 +348,7 @@ async function startBot(number, res = null) {
                     // Try to reconnect after delay
                     console.log(fancy(`🔄 Reconnecting ${sanitizedNumber} in 10 seconds...`));
                     setTimeout(() => {
-                        startBot(sanitizedNumber, null);
+                        startBot(sanitizedNumber, null, method);
                     }, 10000);
                 }
             }
@@ -412,7 +405,7 @@ async function autoReconnectAll() {
         for (const session of sessions) {
             if (!activeSockets.has(session.number)) {
                 console.log(fancy(`Reconnecting ${session.number}...`));
-                startBot(session.number, null);
+                startBot(session.number, null, 'pair'); // Default to pair? Actually we don't know which method was used. Pair is safe.
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
@@ -424,23 +417,39 @@ async function autoReconnectAll() {
 // ==================== HTTP ENDPOINTS ====================
 
 // ✅ **PAIRING ENDPOINT (8-DIGIT CODE)**
-app.get('/pair', async (req, res) => {
+app.get('/code', async (req, res) => {
     try {
-        let num = req.query.num;
+        let num = req.query.number;
         if (!num) {
-            return res.json({ success: false, error: "Provide number! Example: /pair?num=255123456789" });
+            return res.json({ success: false, error: "Provide number! Example: /code?number=255123456789" });
         }
-        
         const cleanNum = num.replace(/[^0-9]/g, '');
         if (cleanNum.length < 10) {
             return res.json({ success: false, error: "Invalid number. Must be at least 10 digits." });
         }
-        
-        // Anza mchakato wa kuconnect namba hii
-        await startBot(cleanNum, res);
-        // Kumbuka: startBot itajibu kupitia `res` baada ya kupata code
+        await startBot(cleanNum, res, 'pair');
     } catch (err) {
         console.error(fancy("Pairing error:"), err.message);
+        if (!res.headersSent) {
+            res.json({ success: false, error: "Failed: " + err.message });
+        }
+    }
+});
+
+// ✅ **QR ENDPOINT**
+app.get('/qr', async (req, res) => {
+    try {
+        let num = req.query.number;
+        if (!num) {
+            return res.json({ success: false, error: "Provide number! Example: /qr?number=255123456789" });
+        }
+        const cleanNum = num.replace(/[^0-9]/g, '');
+        if (cleanNum.length < 10) {
+            return res.json({ success: false, error: "Invalid number. Must be at least 10 digits." });
+        }
+        await startBot(cleanNum, res, 'qr');
+    } catch (err) {
+        console.error(fancy("QR error:"), err.message);
         if (!res.headersSent) {
             res.json({ success: false, error: "Failed: " + err.message });
         }
@@ -454,12 +463,11 @@ app.get('/unpair', async (req, res) => {
         if (!num) {
             return res.json({ success: false, error: "Provide number! Example: /unpair?num=255123456789" });
         }
-        
         const cleanNum = num.replace(/[^0-9]/g, '');
         if (cleanNum.length < 10) {
             return res.json({ success: false, error: "Invalid number" });
         }
-        
+
         const socket = activeSockets.get(cleanNum);
         if (socket) {
             await socket.ws.close();
@@ -467,10 +475,10 @@ app.get('/unpair', async (req, res) => {
             activeSockets.delete(cleanNum);
             socketCreationTime.delete(cleanNum);
         }
-        
+
         await deleteSessionFromDB(cleanNum);
         await fs.remove(path.join(__dirname, 'sessions', cleanNum));
-        
+
         res.json({ success: true, message: `Number ${cleanNum} unpaired successfully` });
     } catch (err) {
         console.error(fancy("Unpair error:"), err.message);
@@ -500,7 +508,7 @@ app.get('/health', (req, res) => {
     const hours = Math.floor(uptime / 3600);
     const minutes = Math.floor((uptime % 3600) / 60);
     const seconds = Math.floor(uptime % 60);
-    
+
     res.json({
         status: 'healthy',
         activeSessions: activeSockets.size,
@@ -509,18 +517,17 @@ app.get('/health', (req, res) => {
     });
 });
 
-// ✅ **BOT INFO ENDPOINT – sasa inaonyesha taarifa za bot kuu (kama ipo) au tu ujumbe**
+// ✅ **BOT INFO ENDPOINT**
 app.get('/botinfo', (req, res) => {
-    // Tunaweza kutoa taarifa za kwanza kwenye activeSockets
     const firstSocket = activeSockets.values().next().value;
     if (!firstSocket || !firstSocket.user) {
-        return res.json({ 
+        return res.json({
             success: false,
             error: "No bot connected",
             activeSessions: activeSockets.size
         });
     }
-    
+
     res.json({
         success: true,
         botName: firstSocket.user?.name || "INSIDIOUS",
@@ -593,31 +600,38 @@ app.post('/api/settings', async (req, res) => {
     }
 });
 
-// ✅ **SIMPLE ROUTES**
+// ==================== SIMPLE ROUTES – serve frontend files ====================
+// These are handled by express.static, but we also have specific routes if needed
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'main.html'));
 });
 
-app.get('/dashboard', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+app.get('/pair', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'pair.html'));
+});
+
+app.get('/qrpage', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'qr.html'));
 });
 
 // ==================== START SERVER ====================
-app.listen(PORT, () => {
-    console.log(fancy(`🌐 Web Interface: http://localhost:${PORT}`));
-    console.log(fancy(`🔗 8-digit Pairing: http://localhost:${PORT}/pair?num=255XXXXXXXXX`));
-    console.log(fancy(`🗑️  Unpair: http://localhost:${PORT}/unpair?num=255XXXXXXXXX`));
-    console.log(fancy(`📊 Connections: http://localhost:${PORT}/connections`));
-    console.log(fancy(`❤️ Health: http://localhost:${PORT}/health`));
-    console.log(fancy(`🔐 Auth API: POST /api/auth`));
-    console.log(fancy(`⚙️ Settings API: GET/POST /api/settings`));
-    console.log(fancy("👑 Developer: STANYTZ"));
-    console.log(fancy("📅 Version: 2.1.1 | Year: 2025"));
-    console.log(fancy("🙏 Special Thanks: REDTECH"));
-    
-    // Anzisha auto-reconnect baada ya sekunde chache
-    setTimeout(autoReconnectAll, 5000);
-});
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(fancy(`🌐 Web Interface: http://localhost:${PORT}`));
+        console.log(fancy(`🔗 Pairing: http://localhost:${PORT}/code?number=255XXXXXXXXX`));
+        console.log(fancy(`📱 QR: http://localhost:${PORT}/qr?number=255XXXXXXXXX`));
+        console.log(fancy(`🗑️  Unpair: http://localhost:${PORT}/unpair?num=255XXXXXXXXX`));
+        console.log(fancy(`📊 Connections: http://localhost:${PORT}/connections`));
+        console.log(fancy(`❤️ Health: http://localhost:${PORT}/health`));
+        console.log(fancy(`🔐 Auth API: POST /api/auth`));
+        console.log(fancy(`⚙️ Settings API: GET/POST /api/settings`));
+        console.log(fancy("👑 Developer: STANYTZ"));
+        console.log(fancy("📅 Version: 2.1.1 | Year: 2025"));
+        console.log(fancy("🙏 Special Thanks: REDTECH"));
+
+        setTimeout(autoReconnectAll, 5000);
+    });
+}
 
 // ==================== CLEANUP ON EXIT ====================
 process.on('SIGINT', async () => {
