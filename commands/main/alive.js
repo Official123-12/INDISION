@@ -20,17 +20,16 @@ module.exports = {
                 }
             }
 
-            // Prepare audio media (same audio for all cards)
-            const audioUrl = config.menuAudio || 'https://eliteprotech-url.zone.id/1771163123472g2ktsd.mp3'; // fallback
-            let audioMedia;
+            // Prepare audio media (optional)
+            const audioUrl = config.menuAudio || 'https://eliteprotech-url.zone.id/1771163123472g2ktsd.mp3';
+            let audioMedia = null;
             try {
                 audioMedia = await prepareWAMessageMedia(
                     { audio: { url: audioUrl }, mimetype: 'audio/mpeg' },
                     { upload: conn.waUploadToServer }
                 );
             } catch (e) {
-                console.error('Failed to load audio:', e);
-                audioMedia = null;
+                console.warn('Audio load failed, continuing without audio:', e.message);
             }
 
             // Calculate ping
@@ -40,17 +39,17 @@ module.exports = {
             // Uptime
             const uptime = runtime(process.uptime());
 
-            // Create cards
+            // Create cards with proper button actions
             const cards = [];
 
             // Card 1: Ping
             cards.push({
                 body: { text: fancy(
                     `━━━━━━━━━━━━━━━━━━\n` +
-                    `   🏓 *PING*\n` +
+                    `   PING\n` +
                     `━━━━━━━━━━━━━━━━━━\n\n` +
                     `📶 Response Time: *${ping}ms*\n\n` +
-                    `🤖 Bot is responsive.`
+                    `Bot is responsive.`
                 ) },
                 footer: { text: fancy(config.footer) },
                 header: audioMedia ? {
@@ -64,7 +63,7 @@ module.exports = {
                     buttons: [{
                         name: "quick_reply",
                         buttonParamsJson: JSON.stringify({
-                            display_text: "🔄 Refresh",
+                            display_text: "⟳ Refresh",
                             id: `${config.prefix}status`
                         })
                     }]
@@ -75,12 +74,12 @@ module.exports = {
             cards.push({
                 body: { text: fancy(
                     `━━━━━━━━━━━━━━━━━━\n` +
-                    `   🤖 *ALIVE*\n` +
+                    `   ALIVE\n` +
                     `━━━━━━━━━━━━━━━━━━\n\n` +
                     `✨ Bot Name: ${config.botName}\n` +
                     `👑 Developer: ${config.developerName}\n` +
                     `📦 Version: ${config.version}\n\n` +
-                    `✅ I'm alive and ready!`
+                    `I'm alive and ready!`
                 ) },
                 footer: { text: fancy(config.footer) },
                 header: audioMedia ? {
@@ -94,7 +93,7 @@ module.exports = {
                     buttons: [{
                         name: "quick_reply",
                         buttonParamsJson: JSON.stringify({
-                            display_text: "🔄 Refresh",
+                            display_text: "⟳ Refresh",
                             id: `${config.prefix}status`
                         })
                     }]
@@ -105,9 +104,9 @@ module.exports = {
             cards.push({
                 body: { text: fancy(
                     `━━━━━━━━━━━━━━━━━━\n` +
-                    `   ⏱️ *RUNTIME*\n` +
+                    `   RUNTIME\n` +
                     `━━━━━━━━━━━━━━━━━━\n\n` +
-                    `🕐 Uptime: *${uptime}*\n\n` +
+                    `⏱️ Uptime: *${uptime}*\n\n` +
                     `Bot has been running for ${uptime}.`
                 ) },
                 footer: { text: fancy(config.footer) },
@@ -122,7 +121,7 @@ module.exports = {
                     buttons: [{
                         name: "quick_reply",
                         buttonParamsJson: JSON.stringify({
-                            display_text: "🔄 Refresh",
+                            display_text: "⟳ Refresh",
                             id: `${config.prefix}status`
                         })
                     }]
@@ -133,12 +132,12 @@ module.exports = {
             const interactiveMessage = {
                 body: { text: fancy(
                     `━━━━━━━━━━━━━━━━━━\n` +
-                    `   📊 *BOT STATUS DASHBOARD*\n` +
+                    `   BOT STATUS DASHBOARD\n` +
                     `━━━━━━━━━━━━━━━━━━\n\n` +
-                    `👋 Hello, *${userName}*!\n` +
-                    `Swipe to view details.`
+                    `Hello, *${userName}*!\n` +
+                    `← Swipe left/right for more details →`
                 ) },
-                footer: { text: fancy("◀️ Slide left/right for more info ▶️") },
+                footer: { text: fancy(config.footer) },
                 header: {
                     title: fancy(config.botName),
                     hasMediaAttachment: false
@@ -148,7 +147,7 @@ module.exports = {
                 }
             };
 
-            // Send as regular interactive message
+            // Send as interactive message
             const messageContent = { interactiveMessage };
             const waMessage = generateWAMessageFromContent(from, messageContent, {
                 userJid: conn.user.id,
@@ -160,7 +159,7 @@ module.exports = {
             console.error("Status error:", e);
             // Fallback plain text
             const uptime = runtime(process.uptime());
-            const text = `🏓 *PING:* Response time ...\n🤖 *ALIVE:* Bot is online\n⏱️ *RUNTIME:* ${uptime}`;
+            const text = `PING: ${ping}ms\nALIVE: Online\nRUNTIME: ${uptime}`;
             await conn.sendMessage(from, { text: fancy(text) }, { quoted: msg });
         }
     }
